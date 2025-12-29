@@ -65,7 +65,7 @@ public class QXBasePlugin: JDBridgeBasePlugin {
     
     private func startQRScanning(callback: JDBridgeCallBack!) {
         guard let callback = callback else { return }
-        let scannerVC = QRScannerViewController { result in
+        let scannerVC = QXScannerViewController { result in
             if let qrResult = result, !qrResult.isEmpty {
                 callback.onSuccess(["data": qrResult, "success": true])
             } else {

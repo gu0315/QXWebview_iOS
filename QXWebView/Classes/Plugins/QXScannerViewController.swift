@@ -3,7 +3,7 @@ import AVFoundation
 import AudioToolbox
 
 /// 二维码扫描视图控制器
-class QRScannerViewController: UIViewController {
+class QXScannerViewController: UIViewController {
     
     // MARK: - 常量定义（避免魔法值）
     private enum Constants {
@@ -407,7 +407,7 @@ class QRScannerViewController: UIViewController {
 }
 
 // MARK: - AVCaptureMetadataOutputObjectsDelegate（优化结果解析）
-extension QRScannerViewController: AVCaptureMetadataOutputObjectsDelegate {
+extension QXScannerViewController: AVCaptureMetadataOutputObjectsDelegate {
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
         // 过滤空数据/重复扫描
         guard isScanning, !metadataObjects.isEmpty else { return }

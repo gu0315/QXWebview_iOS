@@ -1,5 +1,5 @@
 //
-//  QRWebViewController.swift
+//  QXWebViewController.swift
 //  chery_ios
 //
 //  Created by 顾钱想 on 10/10/25.
@@ -17,7 +17,7 @@ private struct ScreenConst {
 }
 
 @objc(QRWebViewController)
-class QRWebViewController: UIViewController {
+public class QXWebViewController: UIViewController {
     
     // MARK: - 公开属性
     /// WebView实例
@@ -70,7 +70,7 @@ class QRWebViewController: UIViewController {
         webView.registerPlugin(withName: "QXBlePlugin", plugin: blePlugin)
     }
     
-    override func viewWillAppear(_ animated: Bool) {
+    public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         // 应用导航栏设置
         navigationController?.setNavigationBarHidden(isNavigationBarHidden, animated: animated)
@@ -78,18 +78,18 @@ class QRWebViewController: UIViewController {
         updateStatusBarStyle()
     }
     
-    override func viewWillDisappear(_ animated: Bool) {
+    public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         // 清理资源
         cleanupResources()
     }
     
-    override func viewDidLayoutSubviews() {
+    public override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateWebViewFrame()
     }
 
-    override var preferredStatusBarStyle: UIStatusBarStyle {
+    public override var preferredStatusBarStyle: UIStatusBarStyle {
         if isImmersiveStatusBar {
             return .lightContent
         } else {
@@ -101,7 +101,7 @@ class QRWebViewController: UIViewController {
         }
     }
     
-    override func didReceiveMemoryWarning() {
+    public override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // 低内存时尝试释放缓存
         clearWebViewCache()
@@ -110,9 +110,13 @@ class QRWebViewController: UIViewController {
     // MARK: - 初始化方法
     /// 初始化方法 - 通过URL
     /// - Parameter url: 要加载的URL
-    convenience init(url: String) {
-        self.init()
+    public init(url: String) {
         self.urlString = url
+        super.init(nibName: nil, bundle: nil) 
+    }
+    
+    required public init?(coder: NSCoder) {
+        super.init(coder: coder)
     }
     
     // MARK: - 私有方法
@@ -364,20 +368,20 @@ class QRWebViewController: UIViewController {
 }
 
 // MARK: - WebViewDelegate实现
-extension QRWebViewController: WebViewDelegate {
+extension QXWebViewController: WebViewDelegate {
     
     // 网页开始加载时调用
-    func webView(_ webView: JDWebViewContainer, didStartProvisionalNavigation navigation: WKNavigation!) {
+    public func webView(_ webView: JDWebViewContainer, didStartProvisionalNavigation navigation: WKNavigation!) {
         print("网页开始加载")
     }
     
     // 网页加载完成时调用
-    func webView(_ webView: JDWebViewContainer, didFinish navigation: WKNavigation!) {
+    public func webView(_ webView: JDWebViewContainer, didFinish navigation: WKNavigation!) {
         print("网页加载完成")
     }
     
     // 网页加载失败时调用
-    func webView(_ webView: JDWebViewContainer, didFail navigation: WKNavigation!, withError error: Error) {
+    public func webView(_ webView: JDWebViewContainer, didFail navigation: WKNavigation!, withError error: Error) {
         print("网页加载失败: \(error.localizedDescription)")
     }
     
@@ -387,7 +391,7 @@ extension QRWebViewController: WebViewDelegate {
     }
     
     // 决定是否允许导航
-    func webView(_ webView: JDWebViewContainer, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: ((WKNavigationActionPolicy) -> Void)) {
+    public func webView(_ webView: JDWebViewContainer, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: ((WKNavigationActionPolicy) -> Void)) {
         guard let url = navigationAction.request.url else {
             decisionHandler(.cancel)
             return
