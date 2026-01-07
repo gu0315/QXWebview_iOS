@@ -104,8 +104,10 @@ public class QXBasePlugin: JDBridgeBasePlugin {
     }
     
     private func handleLocation(callback: JDBridgeCallBack) {
-        if (!CLLocationManager.locationServicesEnabled()) {
-            return
+        DispatchQueue.global().async {
+            if (!CLLocationManager.locationServicesEnabled()) {
+                return
+            }
         }
         QXLocationManager.manager.paramsData = ["accuracy":100, "timeout":3000, "requestPermission":true]
         QXLocationManager.manager.setGetLocationBlock { res in

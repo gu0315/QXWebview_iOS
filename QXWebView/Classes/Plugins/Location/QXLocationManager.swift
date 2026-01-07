@@ -11,7 +11,7 @@ import CoreLocation
 // MARK: - 常量定义
 private let kSCCLocationPositioningCache = "SCCLocationPositioningCache"
 private let kDefaultAccuracy: Int = 100 // 默认定位精度（米）
-private let kDefaultTimeout: TimeInterval = 3 // 默认超时时间（秒）
+private let kDefaultTimeout: TimeInterval = 5 // 默认超时时间（秒）
 private let kLocationServiceDisabledMsg = "系统定位服务未开启"
 private let kPermissionDeniedMsg = "定位权限被拒绝"
 
@@ -41,6 +41,10 @@ class QXLocationManager: NSObject {
     // 私有化构造器 禁止外部实例化
     private override init() {
         super.init()
+        self.systemLocationManager = CLLocationManager()
+        self.systemLocationManager.delegate = self
+        self.systemLocationManager.desiredAccuracy = convertAccuracyToCLLocationAccuracy(targetAccuracy)
+        self.systemLocationManager.distanceFilter = CLLocationDistance(targetAccuracy)
         self.configBaseData()
         self.addNotificationObserver()
     }
@@ -103,10 +107,7 @@ extension QXLocationManager {
         locationResultDict.removeAll()
         errorInfoDict.removeAll()
         bestLocation = nil
-        if systemLocationManager == nil {
-            systemLocationManager = CLLocationManager()
-            systemLocationManager.delegate = self
-        }
+        
         
         // 1. 权限校验
         let authStatus = currentLocationAuthorizationStatus
@@ -139,12 +140,6 @@ extension QXLocationManager {
 // MARK: - 系统定位核心逻辑
 extension QXLocationManager: CLLocationManagerDelegate {
     private func startSystemLocation() {
-        if systemLocationManager == nil {
-            systemLocationManager = CLLocationManager()
-            systemLocationManager.delegate = self
-            systemLocationManager.desiredAccuracy = convertAccuracyToCLLocationAccuracy(targetAccuracy)
-            systemLocationManager.distanceFilter = CLLocationDistance(targetAccuracy)
-        }
         systemLocationManager.startUpdatingLocation()
     }
     
@@ -169,9 +164,7 @@ extension QXLocationManager: CLLocationManagerDelegate {
         guard let newLocation = locations.first else { return }
         
         // 过滤无效定位结果：超时/无效经纬度/精度异常
-        let timeInterval = Date().timeIntervalSince(newLocation.timestamp)
-        guard timeInterval <= 5,
-              newLocation.horizontalAccuracy > 0,
+        guard newLocation.horizontalAccuracy > 0,
               newLocation.coordinate.latitude != 0,
               newLocation.coordinate.longitude != 0 else {
             return
