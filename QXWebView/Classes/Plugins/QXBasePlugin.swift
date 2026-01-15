@@ -32,6 +32,9 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         case "downloadAndOpenFile":
             handleDownloadAndOpenFile(params: params, callback: callback)
             return true
+        case "openMap":
+            handleOpenMap(params: params, callback: callback)
+            return true
         default:
             callback.onFail(NSError(domain: "DeviceInfoPlugin", code: 1001, userInfo: [NSLocalizedDescriptionKey: "未知操作"]))
             return false
@@ -211,6 +214,35 @@ public class QXBasePlugin: JDBridgeBasePlugin {
             }
         }
         task.resume()
+    }
+    
+    private func handleOpenMap(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let params = params else {
+            callback?.onFail("参数不能为空")
+            return
+        }
+        // 使用 String(describing:) 可以确保无论是数字还是字符串都能安全转为 String
+        let lat = String(describing: params["latitude"] ?? "")
+        let lng = String(describing: params["longitude"] ?? "")
+        let name = params["name"] as? String ?? "目的地"
+        // 3. 校验关键坐标是否有效
+        guard !lat.isEmpty, !lng.isEmpty, lat != "<nil>", lng != "<nil>" else {
+            callback?.onFail("经纬度解析失败")
+            return
+        }
+        guard let topVC = UIApplication.shared.topViewController else {
+            callback.onFail(["code": -1, "msg": "未找到顶层视图控制器"])
+            return
+        }
+        // 确保在主线程调用 UI
+        DispatchQueue.main.async {
+            OpenMapAppUtils.shared.showMapSelectSheet(
+                parentVC: topVC,
+                lat: lat,
+                lng: lng,
+                name: name
+            )
+        }
     }
 }
 
