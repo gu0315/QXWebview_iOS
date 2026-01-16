@@ -1,0 +1,6 @@
+framework module QXWebView {
+  umbrella header "QXWebView-umbrella.h"
+
+  export *
+  module * { export * }
+}

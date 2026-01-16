@@ -1,0 +1,37 @@
+PODS:
+  - MJExtension (3.4.2)
+  - QXWebView (0.1.1)
+  - SDWebImage (5.21.5):
+    - SDWebImage/Core (= 5.21.5)
+  - SDWebImage/Core (5.21.5)
+  - SnapKit (5.7.1)
+  - TheRouter (1.1.8)
+
+DEPENDENCIES:
+  - MJExtension
+  - QXWebView (from `./SDK/QXWebView`)
+  - SDWebImage
+  - SnapKit
+  - TheRouter (= 1.1.8)
+
+SPEC REPOS:
+  trunk:
+    - MJExtension
+    - SDWebImage
+    - SnapKit
+    - TheRouter
+
+EXTERNAL SOURCES:
+  QXWebView:
+    :path: "./SDK/QXWebView"
+
+SPEC CHECKSUMS:
+  MJExtension: e97d164cb411aa9795cf576093a1fa208b4a8dd8
+  QXWebView: 75dec5390a0a458858362f6b36de35ca0b33e00a
+  SDWebImage: e9c98383c7572d713c1a0d7dd2783b10599b9838
+  SnapKit: d612e99e678a2d3b95bf60b0705ed0a35c03484a
+  TheRouter: 1c7801e4f3df9a2598088d7c3cf4d2f6d3779c51
+
+PODFILE CHECKSUM: 659bc3b972c87767ee3822196f626510fd8a8c6f
+
+COCOAPODS: 1.16.2
