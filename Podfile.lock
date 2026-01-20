@@ -9,7 +9,7 @@ PODS:
 
 DEPENDENCIES:
   - MJExtension
-  - QXWebView (from `./SDK/QXWebView`)
+  - QXWebView (~> 0.1.1)
   - SDWebImage
   - SnapKit
   - TheRouter (= 1.1.8)
@@ -17,13 +17,10 @@ DEPENDENCIES:
 SPEC REPOS:
   trunk:
     - MJExtension
+    - QXWebView
     - SDWebImage
     - SnapKit
     - TheRouter
-
-EXTERNAL SOURCES:
-  QXWebView:
-    :path: "./SDK/QXWebView"
 
 SPEC CHECKSUMS:
   MJExtension: e97d164cb411aa9795cf576093a1fa208b4a8dd8
@@ -32,6 +29,6 @@ SPEC CHECKSUMS:
   SnapKit: d612e99e678a2d3b95bf60b0705ed0a35c03484a
   TheRouter: 1c7801e4f3df9a2598088d7c3cf4d2f6d3779c51
 
-PODFILE CHECKSUM: 659bc3b972c87767ee3822196f626510fd8a8c6f
+PODFILE CHECKSUM: 17f2a63dcff65d1c168a2f3a030bbb3d1bcdd2ff
 
 COCOAPODS: 1.16.2

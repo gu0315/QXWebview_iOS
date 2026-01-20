@@ -1,5 +1,6 @@
 platform :ios, '15.0'
 source 'https://cdn.cocoapods.org/'
+project 'chery_ios.xcodeproj'
 target 'chery_ios' do
   use_frameworks!
   pod 'SnapKit'
@@ -8,8 +9,8 @@ target 'chery_ios' do
   # 离线包方案
   pod 'TheRouter', '1.1.8'
   
-  pod 'QXWebView', :path=>'./SDK/QXWebView'
-  # pod 'QXWebView', '~> 0.1.1'
+  pod 'QXWebView', :path=>'./QXWebView'
+  #  pod 'QXWebView', '~> 0.1.1'
 end
 
 post_install do
