@@ -30,7 +30,7 @@ Pod::Spec.new do |s|
   # s.social_media_url = 'https://twitter.com/<TWITTER_USERNAME>'
   s.ios.deployment_target = '13.0'
 
-  s.source_files = 'QXWebView/Classes/**/*.{h,m,mm,swift,js}'
+  s.source_files = 'Classes/**/*.{h,m,mm,swift,js}'
   
   # 可选：如果需要排除某些文件/文件夹，可补充
   # s.exclude_files = 'QXWebView/Classes/JDBridge/UnusedFile.swift'
@@ -39,7 +39,7 @@ Pod::Spec.new do |s|
   #  'QXWebView' => ['QXWebView/Resources/*']
   # }
 
-  s.public_header_files = 'QXWebView/Classes/QXWebView.h', 'QXWebView/Classes/JDBridge/*.h', 'QXWebView/Classes/JDWebView/*.h'
+  s.public_header_files = 'Classes/QXWebView.h', 'Classes/JDBridge/*.h', 'Classes/JDWebView/*.h'
   s.frameworks = 'UIKit', 'CoreLocation', 'Foundation'
   # s.libraries = 'z', 'c++'
 

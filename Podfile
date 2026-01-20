@@ -10,7 +10,7 @@ target 'chery_ios' do
   pod 'TheRouter', '1.1.8'
   
   pod 'QXWebView', :path=>'./QXWebView'
-  #  pod 'QXWebView', '~> 0.1.1'
+  # pod 'QXWebView', '~> 0.1.1'
 end
 
 post_install do
