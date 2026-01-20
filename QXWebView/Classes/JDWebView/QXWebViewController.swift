@@ -254,9 +254,14 @@ public class QXWebViewController: UIViewController {
     /// 执行WebView的Frame更新（原生AutoLayout，动画版）
     private func performWebViewFrameUpdate() {
         UIView.animate(withDuration: 0.25) {
+            // 先停用所有约束
+            NSLayoutConstraint.deactivate([
+                self.webViewTopConstraint,
+                self.webViewBottomConstraint
+            ])
+            
             // 更新Top约束
             if self.isNavigationBarHidden && self.isImmersiveStatusBar {
-                self.webViewTopConstraint.constant = 0
                 self.webViewTopConstraint = self.webView.topAnchor.constraint(equalTo: self.view.topAnchor)
             } else {
                 self.webViewTopConstraint = self.webView.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor)
@@ -269,11 +274,7 @@ public class QXWebViewController: UIViewController {
                 self.webViewBottomConstraint = self.webView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
             }
             
-            // 重新激活约束（先取消旧约束，避免冲突）
-            NSLayoutConstraint.deactivate([
-                self.webViewTopConstraint,
-                self.webViewBottomConstraint
-            ])
+            // 激活新约束
             NSLayoutConstraint.activate([
                 self.webViewTopConstraint,
                 self.webViewBottomConstraint
