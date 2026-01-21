@@ -321,54 +321,55 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     }
     
     /// 获取本机蓝牙适配器状态
-    /// - Returns: 包含蓝牙适配器状态信息的字典
+    /// - Returns: 包含蓝牙适配器状态信息和错误码的字典
     public func getBluetoothAdapterState() -> [String: Any] {
+        var result: [String: Any] = [:]
         var adapterState: [String: Any] = [:]
         
-        // 1. 基础状态信息
-        adapterState["available"] = centralManager != nil  // 蓝牙适配器是否可用
-        adapterState["discovering"] = centralManager?.isScanning ?? false  // 是否正在搜索设备
-        
-        // 2. 蓝牙硬件状态
-        let currentState = centralManager?.state ?? .unknown
-        adapterState["state"] = currentState.rawValue
-        adapterState["stateDesc"] = currentState.description
-        
-        // 3. 权限状态
-        if #available(iOS 13.1, *) {
-            let auth = QXBleUtils.checkBluetoothPermission()
-            adapterState["authorization"] = auth.rawValue
-            adapterState["authorizationDesc"] = auth.description
-        } else {
-            let status = QXBleUtils.checkBluetoothPermissionLegacy()
-            adapterState["authorization"] = status.rawValue
-            adapterState["authorizationDesc"] = status.description
-        }
-        
-        // 4. 便捷状态判断
-        adapterState["isAuthorized"] = QXBleUtils.isBluetoothPermissionAuthorized()
-        adapterState["isPoweredOn"] = currentState == .poweredOn
-        adapterState["isSupported"] = currentState != .unsupported
-        
-        // 5. 连接状态信息
-        adapterState["connectedDevicesCount"] = connectedPeripherals.count
-        adapterState["discoveredDevicesCount"] = discoveredPeripherals.count
-        adapterState["hasConnectedDevice"] = !connectedPeripherals.isEmpty
-        
-        // 6. 当前连接的设备信息（如果有）
-        if let currentDevice = currentConnectedPeripheral {
-            adapterState["currentConnectedDevice"] = [
-                "deviceId": currentDevice.identifier.uuidString,
-                "name": currentDevice.name ?? "未知设备",
-                "state": currentDevice.state.rawValue
+        // 检查是否已初始化
+        if centralManager == nil {
+            result["errorCode"] = QXBleErrorCode.notInit.rawValue
+            result["errorMessage"] = QXBleErrorCode.notInit.message
+            result["data"] = [
+                "available": false,
+                "discovering": false
             ]
+            return result
         }
         
-        // 7. 系统信息
-        adapterState["platform"] = "iOS"
-        adapterState["systemVersion"] = UIDevice.current.systemVersion
+        // 获取当前蓝牙硬件状态
+        let currentState = centralManager.state
         
-        return adapterState
+        // 根据 uni-app 文档标准返回状态
+        adapterState["discovering"] = centralManager.isScanning
+        
+        // 检查蓝牙适配器是否可用
+        if currentState == .unsupported {
+            result["errorCode"] = QXBleErrorCode.systemNotSupport.rawValue
+            result["errorMessage"] = "设备不支持蓝牙"
+            adapterState["available"] = false
+        } else if currentState == .poweredOff {
+            result["errorCode"] = QXBleErrorCode.notAvailable.rawValue
+            result["errorMessage"] = QXBleErrorCode.notAvailable.message
+            adapterState["available"] = false
+        } else if currentState == .unauthorized {
+            result["errorCode"] = QXBleErrorCode.notAvailable.rawValue
+            result["errorMessage"] = "蓝牙权限未授权"
+            adapterState["available"] = false
+        } else if currentState == .poweredOn && QXBleUtils.isBluetoothPermissionAuthorized() {
+            // 蓝牙正常可用
+            result["errorCode"] = QXBleErrorCode.success.rawValue
+            result["errorMessage"] = QXBleErrorCode.success.message
+            adapterState["available"] = true
+        } else {
+            // 其他状态（unknown, resetting等）
+            result["errorCode"] = QXBleErrorCode.notAvailable.rawValue
+            result["errorMessage"] = "蓝牙适配器状态异常: \(currentState.description)"
+            adapterState["available"] = false
+        }
+        
+        result["data"] = adapterState
+        return result
     }
     
     // MARK: - CBCentralManagerDelegate 实现

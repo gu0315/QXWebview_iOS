@@ -156,13 +156,25 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     ///   - callback: 获取状态结果回调
     private func getBluetoothAdapterState(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
         // 调用中心管理器获取蓝牙适配器状态
-        let adapterState = QXBleCentralManager.shared.getBluetoothAdapterState()
+        let stateResult = QXBleCentralManager.shared.getBluetoothAdapterState()
         
-        // 返回适配器状态
-        callback.onSuccess(QXBleResult.success(
-            data: adapterState,
-            message: "获取蓝牙适配器状态成功"
-        ))
+        // 根据状态返回相应的结果
+        if let errorCode = stateResult["errorCode"] as? Int, errorCode != 0 {
+            // 有错误，返回失败结果
+            let errorMessage = stateResult["errorMessage"] as? String ?? "获取蓝牙适配器状态失败"
+            callback.onFail([
+                "code": errorCode,
+                "message": errorMessage,
+                "data": stateResult["data"] ?? [:]
+            ])
+        } else {
+            // 正常，返回成功结果
+            callback.onSuccess([
+                "code": 0,
+                "message": "获取蓝牙适配器状态成功",
+                "data": stateResult["data"] ?? [:]
+            ])
+        }
     }
     
     // MARK: - 基础初始化

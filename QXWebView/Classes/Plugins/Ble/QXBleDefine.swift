@@ -54,21 +54,53 @@ import LocalAuthentication
 
 // MARK: - 蓝牙错误码枚举
 public enum QXBleErrorCode: Int {
-    case success = 0
+    case success = 0                    // 正常
+    case notInit = 10000               // 未初始化蓝牙适配器
+    case notAvailable = 10001          // 当前蓝牙适配器不可用
+    case noDevice = 10002              // 没有找到指定设备
+    case connectionFail = 10003        // 连接失败
+    case noService = 10004             // 没有找到指定服务
+    case noCharacteristic = 10005      // 没有找到指定特征值
+    case noConnection = 10006          // 当前连接已断开
+    case propertyNotSupport = 10007    // 当前特征值不支持此操作
+    case systemError = 10008           // 其余所有系统上报的异常
+    case systemNotSupport = 10009      // Android 系统特有，系统版本低于 4.3 不支持 BLE
+    case alreadyConnect = 10010        // 已连接
+    case needPin = 10011               // 配对设备需要配对码
+    case operateTimeOut = 10012        // 连接超时
+    case invalidData = 10013           // 连接 deviceId 为空或者是格式不正确
+    
+    // 兼容旧版本错误码
     case bluetoothNotOpen = -1
     case permissionDenied = -2
     case deviceNotFound = -3
     case connectTimeout = -4
     case characteristicNotFound = -5
     case writeNotSupported = -6
-    case permissionNotDetermined = -7  // 权限未确定
-    case scanNotAvailable = -8         // 扫描不可用
-    case peripheralNil = -9            // 外设为空
+    case permissionNotDetermined = -7
+    case scanNotAvailable = -8
+    case peripheralNil = -9
     case unknownError = -99
     
     var message: String {
         switch self {
-        case .success: return "操作成功"
+        case .success: return "正常"
+        case .notInit: return "未初始化蓝牙适配器"
+        case .notAvailable: return "当前蓝牙适配器不可用"
+        case .noDevice: return "没有找到指定设备"
+        case .connectionFail: return "连接失败"
+        case .noService: return "没有找到指定服务"
+        case .noCharacteristic: return "没有找到指定特征值"
+        case .noConnection: return "当前连接已断开"
+        case .propertyNotSupport: return "当前特征值不支持此操作"
+        case .systemError: return "其余所有系统上报的异常"
+        case .systemNotSupport: return "系统版本低于 4.3 不支持 BLE"
+        case .alreadyConnect: return "已连接"
+        case .needPin: return "配对设备需要配对码"
+        case .operateTimeOut: return "连接超时"
+        case .invalidData: return "连接 deviceId 为空或者是格式不正确"
+        
+        // 兼容旧版本
         case .bluetoothNotOpen: return "蓝牙未开启"
         case .permissionDenied: return "蓝牙权限被拒绝，请前往设置开启"
         case .deviceNotFound: return "未找到指定设备"
