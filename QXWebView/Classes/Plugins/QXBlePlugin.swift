@@ -79,6 +79,10 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             // 关闭蓝牙适配器
             closeBluetoothAdapter(params: params, callback: callback)
             return true
+        case "getBluetoothAdapterState":
+            // 获取蓝牙适配器状态
+            getBluetoothAdapterState(params: params, callback: callback)
+            return true
         default:
             // 不支持的操作，返回失败
             callback.onFail(QXBleResult.failure(errorCode: .unknownError, customMessage: "不支持的操作：\(action)"))
@@ -144,6 +148,21 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         QXBleCentralManager.shared.closeBluetoothAdapter()
         // 返回关闭成功结果
         callback.onSuccess(QXBleResult.success(message: "蓝牙适配器已关闭"))
+    }
+    
+    /// 获取本机蓝牙适配器状态
+    /// - Parameters:
+    ///   - params: 预留参数（暂无实际用途）
+    ///   - callback: 获取状态结果回调
+    private func getBluetoothAdapterState(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
+        // 调用中心管理器获取蓝牙适配器状态
+        let adapterState = QXBleCentralManager.shared.getBluetoothAdapterState()
+        
+        // 返回适配器状态
+        callback.onSuccess(QXBleResult.success(
+            data: adapterState,
+            message: "获取蓝牙适配器状态成功"
+        ))
     }
     
     // MARK: - 基础初始化

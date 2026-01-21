@@ -320,6 +320,57 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         print("蓝牙适配器已关闭，所有资源已清理")
     }
     
+    /// 获取本机蓝牙适配器状态
+    /// - Returns: 包含蓝牙适配器状态信息的字典
+    public func getBluetoothAdapterState() -> [String: Any] {
+        var adapterState: [String: Any] = [:]
+        
+        // 1. 基础状态信息
+        adapterState["available"] = centralManager != nil  // 蓝牙适配器是否可用
+        adapterState["discovering"] = centralManager?.isScanning ?? false  // 是否正在搜索设备
+        
+        // 2. 蓝牙硬件状态
+        let currentState = centralManager?.state ?? .unknown
+        adapterState["state"] = currentState.rawValue
+        adapterState["stateDesc"] = currentState.description
+        
+        // 3. 权限状态
+        if #available(iOS 13.1, *) {
+            let auth = QXBleUtils.checkBluetoothPermission()
+            adapterState["authorization"] = auth.rawValue
+            adapterState["authorizationDesc"] = auth.description
+        } else {
+            let status = QXBleUtils.checkBluetoothPermissionLegacy()
+            adapterState["authorization"] = status.rawValue
+            adapterState["authorizationDesc"] = status.description
+        }
+        
+        // 4. 便捷状态判断
+        adapterState["isAuthorized"] = QXBleUtils.isBluetoothPermissionAuthorized()
+        adapterState["isPoweredOn"] = currentState == .poweredOn
+        adapterState["isSupported"] = currentState != .unsupported
+        
+        // 5. 连接状态信息
+        adapterState["connectedDevicesCount"] = connectedPeripherals.count
+        adapterState["discoveredDevicesCount"] = discoveredPeripherals.count
+        adapterState["hasConnectedDevice"] = !connectedPeripherals.isEmpty
+        
+        // 6. 当前连接的设备信息（如果有）
+        if let currentDevice = currentConnectedPeripheral {
+            adapterState["currentConnectedDevice"] = [
+                "deviceId": currentDevice.identifier.uuidString,
+                "name": currentDevice.name ?? "未知设备",
+                "state": currentDevice.state.rawValue
+            ]
+        }
+        
+        // 7. 系统信息
+        adapterState["platform"] = "iOS"
+        adapterState["systemVersion"] = UIDevice.current.systemVersion
+        
+        return adapterState
+    }
+    
     // MARK: - CBCentralManagerDelegate 实现
     /// 蓝牙中心管理器状态更新回调
     /// 当蓝牙硬件状态发生变化时调用（如蓝牙开启/关闭/未授权等）
