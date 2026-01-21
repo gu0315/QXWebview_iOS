@@ -392,6 +392,19 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
             removeCallback(forKey: callbackKey)
         }
     }
+    
+    // MARK: - 缓存管理
+    /// 清理所有缓存和回调
+    public func clearAllCaches() {
+        // 清理特征缓存
+        characteristicsCache.removeAll()
+        // 清理服务缓存
+        servicesCache.removeAll()
+        // 清理所有回调
+        callbacks.removeAll()
+        characteristicValueUpdateCallback = nil
+        print("外设管理器缓存已清理")
+    }
 }
 
 // MARK: - Data 扩展

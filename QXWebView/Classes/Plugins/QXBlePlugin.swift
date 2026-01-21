@@ -27,7 +27,7 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         print("QXBlePlugin-excute-action:\(action), params:\(params)")
         // 根据指令名称分发到对应处理方法
         switch action {
-        case "initBle":
+        case "openBluetoothAdapter":
             // 初始化蓝牙管理器
             initBle(params: params, callback: callback)
             return true
@@ -74,6 +74,10 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         case "openAppSettings":
             // 打开应用设置页面
             openAppSettings(params: params, callback: callback)
+            return true
+        case "closeBluetoothAdapter":
+            // 关闭蓝牙适配器
+            closeBluetoothAdapter(params: params, callback: callback)
             return true
         default:
             // 不支持的操作，返回失败
@@ -129,6 +133,17 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     private func openAppSettings(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
         QXBleUtils.openAppSettings()
         callback.onSuccess(QXBleResult.success(message: "已打开应用设置页面"))
+    }
+    
+    /// 关闭蓝牙适配器
+    /// - Parameters:
+    ///   - params: 预留参数（暂无实际用途）
+    ///   - callback: 关闭结果回调
+    private func closeBluetoothAdapter(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
+        // 调用中心管理器关闭蓝牙适配器
+        QXBleCentralManager.shared.closeBluetoothAdapter()
+        // 返回关闭成功结果
+        callback.onSuccess(QXBleResult.success(message: "蓝牙适配器已关闭"))
     }
     
     // MARK: - 基础初始化

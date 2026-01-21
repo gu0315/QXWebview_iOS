@@ -291,6 +291,35 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         connectedPeripherals.removeValue(forKey: deviceId)
     }
     
+    // MARK: - 蓝牙适配器管理
+    /// 关闭蓝牙适配器，清理所有资源
+    public func closeBluetoothAdapter() {
+        // 停止扫描
+        if centralManager.isScanning {
+            centralManager.stopScan()
+        }
+        // 断开所有已连接的设备
+        connectedPeripherals.values.forEach { peripheral in
+            if peripheral.state == .connected {
+                centralManager.cancelPeripheralConnection(peripheral)
+            }
+        }
+        // 清理所有连接状态
+        currentConnectedPeripheral = nil
+        currentConnectedDeviceId = nil
+        connectedPeripherals.removeAll()
+        // 清理发现的设备列表
+        discoveredPeripherals.removeAll()
+        // 清理所有回调缓存
+        callbacks.removeAll()
+        permissionCallback = nil
+        // 清理外设管理器的缓存
+        QXBlePeripheralManager.shared.clearAllCaches()
+        // 重置蓝牙状态
+        state = .unknown
+        print("蓝牙适配器已关闭，所有资源已清理")
+    }
+    
     // MARK: - CBCentralManagerDelegate 实现
     /// 蓝牙中心管理器状态更新回调
     /// 当蓝牙硬件状态发生变化时调用（如蓝牙开启/关闭/未授权等）
