@@ -32,6 +32,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     /// 已发现的蓝牙设备列表
     private(set) public var discoveredPeripherals: [CBPeripheral] = []
     
+    /// 设备 RSSI 缓存（key: deviceId, value: RSSI）
+    private var deviceRSSICache: [String: NSNumber] = [:]
+    
     /// 当前连接的设备（单设备连接模式）
     private(set) public var currentConnectedPeripheral: CBPeripheral?
     
@@ -123,6 +126,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         
         // 清空历史扫描结果
         discoveredPeripherals.removeAll()
+        
+        // 清空历史 RSSI 缓存
+        deviceRSSICache.removeAll()
         
         // 配置扫描选项：不允许重复发现同一设备
         let scanOptions: [String: Any] = [CBCentralManagerScanOptionAllowDuplicatesKey: false]
@@ -310,6 +316,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         connectedPeripherals.removeAll()
         // 清理发现的设备列表
         discoveredPeripherals.removeAll()
+        
+        // 清理设备 RSSI 缓存
+        deviceRSSICache.removeAll()
         // 清理所有回调缓存
         callbacks.removeAll()
         permissionCallback = nil
@@ -369,6 +378,47 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         }
         
         result["data"] = adapterState
+        return result
+    }
+    
+    /// 获取在蓝牙模块生效期间所有已发现的蓝牙设备
+    /// - Returns: 包含已发现蓝牙设备列表的字典
+    public func getBluetoothDevices() -> [String: Any] {
+        var result: [String: Any] = [:]
+        
+        // 检查是否已初始化
+        if centralManager == nil {
+            result["errorCode"] = QXBleErrorCode.notInit.rawValue
+            result["errorMessage"] = QXBleErrorCode.notInit.message
+            result["data"] = ["devices": []]
+            return result
+        }
+        
+        // 检查蓝牙状态
+        let currentState = centralManager.state
+        if currentState != .poweredOn || !QXBleUtils.isBluetoothPermissionAuthorized() {
+            result["errorCode"] = QXBleErrorCode.notAvailable.rawValue
+            result["errorMessage"] = QXBleErrorCode.notAvailable.message
+            result["data"] = ["devices": []]
+            return result
+        }
+        
+        // 格式化设备列表，符合 uni-app 文档标准
+        let devices = discoveredPeripherals.map { peripheral -> [String: Any] in
+            let deviceId = peripheral.identifier.uuidString
+            let rssi = deviceRSSICache[deviceId]?.intValue ?? 0
+            
+            return [
+                "name": peripheral.name ?? "",
+                "deviceId": deviceId,
+                "RSSI": rssi
+            ]
+        }
+        
+        result["errorCode"] = QXBleErrorCode.success.rawValue
+        result["errorMessage"] = QXBleErrorCode.success.message
+        result["data"] = ["devices": devices]
+        
         return result
     }
     
@@ -448,17 +498,23 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         guard peripheral.name != nil else { return }
     
         // 去重添加设备到扫描结果列表
-        let isExisted = discoveredPeripherals.contains { $0.identifier.uuidString == peripheral.identifier.uuidString }
+        let deviceId = peripheral.identifier.uuidString
+        let isExisted = discoveredPeripherals.contains { $0.identifier.uuidString == deviceId }
         if !isExisted {
             discoveredPeripherals.append(peripheral)
-            
+        }
+        
+        // 缓存或更新设备的 RSSI 值
+        deviceRSSICache[deviceId] = RSSI
+        
+        if !isExisted {
             // 实时回调扫描结果给JS端
             callbacks.forEach { (key, callback) in
                 if QXBleUtils.getCallbackTypePrefix(from: key) == QXBLEventType.onBluetoothDeviceFound.prefix {
                     let params: [String: Any] = [
                         "name": peripheral.name ?? "",
                         "rssi": RSSI,
-                        "deviceId": peripheral.identifier.uuidString,
+                        "deviceId": deviceId,
                         "eventName": "onBluetoothDeviceFound"
                     ]
                     callback?.callJSWithPluginName("QXBlePlugin", params: params) { _, _ in

@@ -83,6 +83,10 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             // 获取蓝牙适配器状态
             getBluetoothAdapterState(params: params, callback: callback)
             return true
+        case "getBluetoothDevices":
+            // 获取已发现的蓝牙设备
+            getBluetoothDevices(params: params, callback: callback)
+            return true
         default:
             // 不支持的操作，返回失败
             callback.onFail(QXBleResult.failure(errorCode: .unknownError, customMessage: "不支持的操作：\(action)"))
@@ -173,6 +177,33 @@ public class QXBlePlugin: JDBridgeBasePlugin {
                 "code": 0,
                 "message": "获取蓝牙适配器状态成功",
                 "data": stateResult["data"] ?? [:]
+            ])
+        }
+    }
+    
+    /// 获取在蓝牙模块生效期间所有已发现的蓝牙设备
+    /// - Parameters:
+    ///   - params: 预留参数（暂无实际用途）
+    ///   - callback: 获取设备列表结果回调
+    private func getBluetoothDevices(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
+        // 调用中心管理器获取已发现的蓝牙设备
+        let devicesResult = QXBleCentralManager.shared.getBluetoothDevices()
+        
+        // 根据结果返回相应的响应
+        if let errorCode = devicesResult["errorCode"] as? Int, errorCode != 0 {
+            // 有错误，返回失败结果
+            let errorMessage = devicesResult["errorMessage"] as? String ?? "获取蓝牙设备列表失败"
+            callback.onFail([
+                "code": errorCode,
+                "message": errorMessage,
+                "data": devicesResult["data"] ?? [:]
+            ])
+        } else {
+            // 正常，返回成功结果
+            callback.onSuccess([
+                "code": 0,
+                "message": "获取蓝牙设备列表成功",
+                "data": devicesResult["data"] ?? [:]
             ])
         }
     }
