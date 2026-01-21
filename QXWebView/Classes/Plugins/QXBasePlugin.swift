@@ -98,7 +98,8 @@ public class QXBasePlugin: JDBridgeBasePlugin {
             "screenHeight": Const.screenHeight,
             "isIphoneX": Const.isIphoneX,
             "statusBarHeight": Const.statusBarHeight,
-            "navBarHeight": Const.navBarHeight,
+            "navHeight": Const.navBarHeight,
+            "navBarHeight": Const.realNavBarHeight,
             "bottomSafeHeight": Const.bottomSafeHeight,
             "locale": Locale.current.identifier,
             "timezone": TimeZone.current.identifier
