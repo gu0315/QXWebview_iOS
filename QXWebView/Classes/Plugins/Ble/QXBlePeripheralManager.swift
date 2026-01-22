@@ -228,6 +228,8 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
         
         // 格式化服务数据并返回
         let formattedServices = QXBleUtils.formatServices(services)
+        
+        print("服务列表：\(formattedServices)")
         callback?.onSuccess(QXBleResult.success(
             data: ["services": formattedServices],
             message: "发现服务成功，共\(services.count)个服务"
@@ -335,25 +337,16 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     ///   - characteristic: 更新的特征
     ///   - error: 特征值更新的错误信息（如果有）
     public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        // 获取通知回调
-        guard let callback = characteristicValueUpdateCallback else { return }
-        
         // 处理特征值更新
-        if let error = error {
-            let errorMsg = "特征值更新失败：\(error.localizedDescription)"
-            callback.onFail(QXBleResult.failure(errorCode: .unknownError, customMessage: errorMsg))
-        } else {
-            let result = QXBleResult.success(
-                data: [
-                    "deviceId": peripheral.identifier.uuidString,
-                    "characteristicId": characteristic.uuid.uuidString,
-                    "value": characteristic.value?.base64EncodedString() ?? "",
-                    "hexValue": characteristic.value?.hexString ?? "",
-                    "rawValue": characteristic.value ?? Data()
-                ],
-                message: "特征值已更新"
-            )
-            callback.onSuccess(result)
+        let params: [String: Any] = [
+            "eventName": "onBLECharacteristicValueChange",
+            "deviceId": peripheral.identifier.uuidString,
+            "characteristicId": characteristic.uuid.uuidString,
+            "value": characteristic.value?.hexString ?? "",
+        ]
+        
+        callJSWithPluginName("QXBlePlugin", params: params) { _, _ in
+            print("didUpdateValueFor 回调执行：\(params)")
         }
     }
     
@@ -412,6 +405,19 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
 extension Data {
     /// 转换为16进制字符串
     var hexString: String {
-        return map { String(format: "%02hhx", $0) }.joined()
+        // 空Data返回 "[]"，对齐Android空数组逻辑
+        if self.isEmpty {
+            return "[]"
+        }
+        let hexBytes = self.map { String(format: "%02hhx", $0) }
+        // 用", "连接所有字节的16进制字符串，再包裹中括号
+        return "[\(hexBytes.joined(separator: ", "))]"
+    }
+    
+    static func toHexString(_ data: Data?) -> String {
+        guard let data = data else {
+            return "null" // 对应Android bytes == null
+        }
+        return data.hexString
     }
 }

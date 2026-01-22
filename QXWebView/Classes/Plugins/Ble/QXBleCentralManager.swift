@@ -229,7 +229,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         
         // 设置外设代理（处理服务/特征发现）
         peripheral.delegate = QXBlePeripheralManager.shared
-        
+    
         // 配置连接选项：开启连接/断开通知
         let connectOptions: [String: Any] = [
             CBConnectPeripheralOptionNotifyOnConnectionKey: true,
@@ -239,8 +239,8 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         // 发起连接
         centralManager.connect(peripheral, options: connectOptions)
         
-        // 连接超时处理（10秒）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+        // 连接超时处理（15秒）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15.0) { [weak self] in
             guard let self = self else { return }
             
             if peripheral.state != .connected {

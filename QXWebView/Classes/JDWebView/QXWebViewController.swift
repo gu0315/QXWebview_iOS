@@ -83,8 +83,6 @@ public class QXWebViewController: UIViewController {
     
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        // 清理资源
-        cleanupResources()
     }
     
     public override func viewDidLayoutSubviews() {

@@ -495,7 +495,7 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         guard let deviceId = params["deviceId"] as? String,
               let serviceId = params["serviceId"] as? String,
               let characteristicId = params["characteristicId"] as? String,
-              let enabled = params["enabled"] as? Bool else {
+              let enabled = params["enable"] as? Bool else {
             
             callback.onFail(QXBleResult.failure(
                 errorCode: .unknownError,
