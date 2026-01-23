@@ -109,42 +109,42 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - callbackKey: 本次扫描的回调标识
     ///   - callback: 扫描操作结果回调
     public func startScan(services: [CBUUID]?, timeout: TimeInterval = 10.0, callbackKey: String, callback: JDBridgeCallBack?) {
-        // 权限检查
+        // 1. 权限前置检查
         guard QXBleUtils.isBluetoothPermissionAuthorized() else {
             callback?.onFail(QXBleResult.failure(errorCode: .permissionDenied))
             return
         }
         
-        // 蓝牙硬件状态检查
+        // 2. 蓝牙硬件状态检查
         guard state == .poweredOn else {
             callback?.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen))
             return
         }
         
-        // 注册扫描回调
+        // 3. 注册扫描回调
         callbacks[callbackKey] = callback
         
-        // 清空历史扫描结果
+        // 4. 清空历史扫描结果和RSSI缓存
         discoveredPeripherals.removeAll()
-        
-        // 清空历史 RSSI 缓存
         deviceRSSICache.removeAll()
         
-        // 配置扫描选项：不允许重复发现同一设备
+        // 5. 配置扫描选项：不允许重复发现同一设备（提高性能）
         let scanOptions: [String: Any] = [CBCentralManagerScanOptionAllowDuplicatesKey: false]
         
-        // 开始扫描
+        // 6. 开始扫描
         centralManager.scanForPeripherals(withServices: services, options: scanOptions)
+        print("开始扫描蓝牙设备，超时时间：\(timeout)秒")
         
-        // 扫描超时处理
+        // 7. 扫描超时处理（防止长时间扫描消耗电量）
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
             guard let self = self else { return }
             
             // 检查是否仍在扫描
             if self.centralManager.isScanning {
+                print("扫描超时，自动停止扫描，共发现\(self.discoveredPeripherals.count)个设备")
                 self.stopScan(callbackKey: callbackKey)
                 
-                // 返回超时结果
+                // 返回超时结果（包含已发现的设备列表）
                 let result = QXBleResult.success(
                     data: ["devices": QXBleUtils.formatPeripherals(self.discoveredPeripherals)],
                     message: "扫描超时，已自动停止"
@@ -157,22 +157,27 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     /// 停止扫描蓝牙设备
     /// - Parameter callbackKey: 扫描时的回调标识
     public func stopScan(callbackKey: String) {
-        // 停止扫描（双重校验）
-        if centralManager.isScanning {
-            centralManager.stopScan()
-            
-            // 触发扫描停止回调
-            if let callback = callbacks[callbackKey] {
-                let result = QXBleResult.success(
-                    data: ["devices": QXBleUtils.formatPeripherals(discoveredPeripherals)],
-                    message: "已停止扫描，共发现\(discoveredPeripherals.count)个设备"
-                )
-                callback?.onSuccess(result)
-            }
-            
-            // 清理回调缓存
-            callbacks.removeValue(forKey: callbackKey)
+        // 检查是否正在扫描
+        guard centralManager.isScanning else {
+            print("当前未在扫描，无需停止")
+            return
         }
+        
+        // 停止扫描
+        centralManager.stopScan()
+        print("已停止扫描，共发现\(discoveredPeripherals.count)个设备")
+        
+        // 触发扫描停止回调（如果存在）
+        if let callback = callbacks[callbackKey] {
+            let result = QXBleResult.success(
+                data: ["devices": QXBleUtils.formatPeripherals(discoveredPeripherals)],
+                message: "已停止扫描，共发现\(discoveredPeripherals.count)个设备"
+            )
+            callback?.onSuccess(result)
+        }
+        
+        // 清理回调缓存
+        callbacks.removeValue(forKey: callbackKey)
     }
     
     // MARK: - 连接相关
@@ -492,33 +497,40 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - central: 蓝牙中心管理器实例
     ///   - peripheral: 发现的蓝牙外设
     ///   - advertisementData: 设备广播数据
-    ///   - RSSI: 设备信号强度
+    ///   - RSSI: 设备信号强度（单位：dBm，负值越小信号越强）
     public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        // 过滤空名称设备（可选）
-        guard peripheral.name != nil else { return }
+        // 1. 过滤无名称设备（可选，根据业务需求决定是否过滤）
+        guard peripheral.name != nil else {
+            return
+        }
     
-        // 去重添加设备到扫描结果列表
+        // 2. 去重添加设备到扫描结果列表
         let deviceId = peripheral.identifier.uuidString
         let isExisted = discoveredPeripherals.contains { $0.identifier.uuidString == deviceId }
+        
         if !isExisted {
             discoveredPeripherals.append(peripheral)
+            print("发现新设备：\(peripheral.name ?? "未知") (\(deviceId)), RSSI: \(RSSI)")
         }
         
-        // 缓存或更新设备的 RSSI 值
+        // 3. 缓存或更新设备的RSSI值（用于信号强度排序）
         deviceRSSICache[deviceId] = RSSI
         
+        // 4. 实时回调扫描结果给JS端（仅新设备）
         if !isExisted {
-            // 实时回调扫描结果给JS端
             callbacks.forEach { (key, callback) in
+                // 检查是否为设备发现回调
                 if QXBleUtils.getCallbackTypePrefix(from: key) == QXBLEventType.onBluetoothDeviceFound.prefix {
                     let params: [String: Any] = [
                         "name": peripheral.name ?? "",
-                        "rssi": RSSI,
+                        "rssi": RSSI.intValue,
                         "deviceId": deviceId,
                         "eventName": "onBluetoothDeviceFound"
                     ]
+                    
+                    // 调用JS回调
                     callback?.callJSWithPluginName("QXBlePlugin", params: params) { _, _ in
-                        print("发现设备回调执行：\(params)")
+                        print("✅ 设备发现事件已通知JS端：\(peripheral.name ?? "未知")")
                     }
                 }
             }

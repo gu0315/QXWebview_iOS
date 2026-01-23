@@ -338,12 +338,11 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     ///             - deviceId: 设备唯一标识
     ///             - serviceId: 服务UUID
     ///             - characteristicId: 特征值UUID
-    ///             - value: 字符串数据（可选）
-    ///             - valueBase64: Base64编码数据（可选）
-    ///             - valueHex: 16进制字符串数据（可选）
+    ///             - value: 字符串数据
+    ///             - valueType: 数据类型（UTF8/BASE64/HEX，默认UTF8）
     ///   - callback: 写入结果回调
     private func writeBLECharacteristicValue(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 必传参数校验
+        // 1. 必传参数校验
         guard let deviceId = params["deviceId"] as? String,
               let serviceId = params["serviceId"] as? String,
               let characteristicId = params["characteristicId"] as? String else {
@@ -354,60 +353,93 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        var valueData: Data?
-        // 1. 取出基础参数
+        // 2. 数据参数校验
         guard let valueStr = params["value"] as? String, !valueStr.isEmpty else {
-            print("数据解析失败：value参数为空")
+            callback.onFail(QXBleResult.failure(
+                errorCode: .unknownError,
+                customMessage: "value参数为空"
+            ))
             return
         }
-        let valueType = (params["valueType"] as? String)?.uppercased() ?? "UTF8" // 默认UTF8
-        // 2. 按类型解析
+        
+        // 3. 获取数据类型（默认UTF8）
+        let valueType = (params["valueType"] as? String)?.uppercased() ?? "UTF8"
+        
+        // 4. 根据类型解析数据
+        var valueData: Data?
         switch valueType {
         case "BASE64":
             // Base64格式解析
             valueData = Data(base64Encoded: valueStr)
+            if valueData == nil {
+                print("❌ Base64数据解析失败：\(valueStr)")
+            }
+
         case "HEX", "16进制":
             // 16进制格式解析（兼容空格、大小写）
             let cleanedHex = valueStr.replacingOccurrences(of: " ", with: "").uppercased()
+            
+            // 校验16进制字符串长度
+            guard cleanedHex.count % 2 == 0 else {
+                print("❌ 16进制数据长度不合法：\(valueStr)")
+                valueData = nil
+                break
+            }
+            
             let length = cleanedHex.count / 2
             var data = Data(capacity: length)
+            
+            // 逐字节解析
             for i in 0..<length {
                 let start = cleanedHex.index(cleanedHex.startIndex, offsetBy: i*2)
                 let end = cleanedHex.index(start, offsetBy: 2)
                 if let byte = UInt8(cleanedHex[start..<end], radix: 16) {
                     data.append(byte)
                 } else {
+                    print("❌ 16进制数据解析失败：\(cleanedHex[start..<end])")
                     data = Data()
                     break
                 }
             }
             valueData = data.count > 0 ? data : nil
+            
         case "UTF8", "TEXT":
             // UTF8/文本格式解析（默认）
             valueData = valueStr.data(using: .utf8)
+            if valueData == nil {
+                print("❌ UTF8数据解析失败：\(valueStr)")
+            }
+            
         default:
             // 未知类型：默认按UTF8解析
-            print("未知的valueType：\(valueType)，默认按UTF8解析")
+            print("⚠️ 未知的valueType：\(valueType)，默认按UTF8解析")
             valueData = valueStr.data(using: .utf8)
         }
 
-        // 3. 最终校验
-        guard valueData != nil else {
-            print("数据解析失败：value=\(valueStr)，type=\(valueType)")
+        // 5. 数据解析结果校验
+        guard let finalData = valueData, !finalData.isEmpty else {
+            callback.onFail(QXBleResult.failure(
+                errorCode: .unknownError,
+                customMessage: "数据解析失败：value=\(valueStr)，type=\(valueType)"
+            ))
             return
         }
-        // 设备连接状态校验
+        
+        print("📤 准备写入数据：\(finalData.hexString)")
+        
+        // 6. 设备连接状态校验
         guard let peripheral = QXBleCentralManager.shared.connectedPeripherals[deviceId] else {
             callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound))
             return
         }
-        // 调用外设管理器写入数据
+        
+        // 7. 调用外设管理器写入数据
         QXBlePeripheralManager.shared.writeValue(
             deviceId: deviceId,
             peripheral: peripheral,
             serviceId: serviceId,
             characteristicId: characteristicId,
-            value: valueData!,
+            value: finalData,
             callback: callback
         )
     }

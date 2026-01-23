@@ -36,14 +36,16 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     private var characteristicValueUpdateCallback: JDBridgeCallBack?
     
     // MARK: - 回调管理方法
+    
     /// 注册回调
     /// - Parameters:
     ///   - callback: 回调对象
-    ///   - key: 回调键
+    ///   - key: 回调键（用于标识不同的操作）
     public func registerCallback(_ callback: JDBridgeCallBack?, forKey key: String) {
         callbacks[key] = callback
+        print("📝 注册回调：\(key)")
         
-        // 如果是特征值更新回调，单独存储
+        // 如果是特征值更新回调，单独存储（用于持续接收通知）
         if key.hasPrefix(QXBleCallbackType.notifyCharacteristic.prefix) {
             characteristicValueUpdateCallback = callback
         }
@@ -53,6 +55,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     /// - Parameter key: 回调键
     public func removeCallback(forKey key: String) {
         callbacks.removeValue(forKey: key)
+        print("🗑️ 移除回调：\(key)")
         
         // 如果是特征值更新回调，清空引用
         if key.hasPrefix(QXBleCallbackType.notifyCharacteristic.prefix) {
@@ -337,16 +340,31 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     ///   - characteristic: 更新的特征
     ///   - error: 特征值更新的错误信息（如果有）
     public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        // 处理特征值更新
+        // 1. 错误处理
+        if let error = error {
+            print("❌ 特征值更新失败：\(error.localizedDescription)")
+            return
+        }
+        
+        // 2. 获取特征值数据
+        guard let value = characteristic.value else {
+            print("⚠️ 特征值为空")
+            return
+        }
+        
+        // 3. 构造回调参数
         let params: [String: Any] = [
             "eventName": "onBLECharacteristicValueChange",
             "deviceId": peripheral.identifier.uuidString,
             "characteristicId": characteristic.uuid.uuidString,
-            "value": characteristic.value?.hexString ?? "",
+            "value": value.hexString,  // 转换为16进制字符串
         ]
         
+        print("📡 收到特征值更新：\(characteristic.uuid.uuidString), 数据：\(value.hexString)")
+        
+        // 4. 调用JS回调通知前端
         callJSWithPluginName("QXBlePlugin", params: params) { _, _ in
-            print("didUpdateValueFor 回调执行：\(params)")
+            print("✅ 特征值变化事件已通知JS端")
         }
     }
     
@@ -387,36 +405,51 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     }
     
     // MARK: - 缓存管理
+    
     /// 清理所有缓存和回调
+    /// 用于关闭蓝牙适配器或重置状态时调用
     public func clearAllCaches() {
         // 清理特征缓存
         characteristicsCache.removeAll()
+        print("🧹 已清理特征缓存")
+        
         // 清理服务缓存
         servicesCache.removeAll()
+        print("🧹 已清理服务缓存")
+        
         // 清理所有回调
         callbacks.removeAll()
         characteristicValueUpdateCallback = nil
-        print("外设管理器缓存已清理")
+        print("🧹 已清理所有回调")
+        
+        print("✅ 外设管理器缓存清理完成")
     }
 }
 
 // MARK: - Data 扩展
-/// 扩展Data，提供16进制字符串转换
+/// 扩展Data，提供16进制字符串转换功能
 extension Data {
-    /// 转换为16进制字符串
+    /// 转换为16进制字符串（格式：[xx, xx, xx]）
+    /// 示例：Data([0x01, 0xA3, 0xFF]) -> "[01, a3, ff]"
     var hexString: String {
-        // 空Data返回 "[]"，对齐Android空数组逻辑
+        // 空Data返回空数组字符串
         if self.isEmpty {
             return "[]"
         }
+        
+        // 将每个字节转换为2位16进制字符串
         let hexBytes = self.map { String(format: "%02hhx", $0) }
-        // 用", "连接所有字节的16进制字符串，再包裹中括号
+        
+        // 用", "连接所有字节，并包裹中括号
         return "[\(hexBytes.joined(separator: ", "))]"
     }
     
+    /// 静态方法：将Data转换为16进制字符串
+    /// - Parameter data: 要转换的Data对象（可选）
+    /// - Returns: 16进制字符串，如果data为nil则返回"null"
     static func toHexString(_ data: Data?) -> String {
         guard let data = data else {
-            return "null" // 对应Android bytes == null
+            return "null"
         }
         return data.hexString
     }
