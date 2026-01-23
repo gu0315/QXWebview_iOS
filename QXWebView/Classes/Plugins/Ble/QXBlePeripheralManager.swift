@@ -28,6 +28,10 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     /// 服务缓存（key: deviceId）
     private(set) public var servicesCache: [String: [CBService]] = [:]
     
+    /// 最后写入的数据缓存（key: deviceId_characteristicId, value: Data）
+    /// 用于在写入回调中返回写入的数据，因为characteristic.value可能为nil
+    private var lastWrittenDataCache: [String: Data] = [:]
+    
     // MARK: - 回调管理
     /// 回调字典，用于管理各种蓝牙操作的回调
     private var callbacks: [String: JDBridgeCallBack?] = [:]
@@ -107,13 +111,13 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
         value: Data,
         callback: JDBridgeCallBack?
     ) {
-        // 设备连接状态校验
+        // 1. 设备连接状态校验
         guard peripheral.state == .connected else {
             callback?.onFail(QXBleResult.failure(errorCode: .deviceNotFound, customMessage: "设备未连接"))
             return
         }
         
-        // 查找目标特征
+        // 2. 查找目标特征
         let cacheKey = "\(deviceId)_\(serviceId)"
         guard let chars = characteristicsCache[cacheKey],
               let char = chars.first(where: { $0.uuid.uuidString == characteristicId }) else {
@@ -121,26 +125,36 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
             return
         }
         
-        // 检查写入权限
+        // 3. 检查写入权限
         guard char.properties.contains(.write) || char.properties.contains(.writeWithoutResponse) else {
             callback?.onFail(QXBleResult.failure(errorCode: .writeNotSupported))
             return
         }
         
-        // 生成回调key并注册
+        // 4. 缓存写入的数据（用于回调时返回）
+        let dataCacheKey = "\(deviceId)_\(characteristicId)"
+        lastWrittenDataCache[dataCacheKey] = value
+        print("💾 缓存写入数据：\(dataCacheKey) -> \(value.hexString)")
+        
+        // 5. 生成回调key并注册
         let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.writeCharacteristic.prefix, deviceId: deviceId)
         registerCallback(callback, forKey: callbackKey)
         
-        // 选择写入类型（优先无响应写入）
+        // 6. 选择写入类型（优先无响应写入）
         let writeType: CBCharacteristicWriteType = char.properties.contains(.writeWithoutResponse) ? .withoutResponse : .withResponse
         
-        // 执行写入操作
+        print("📤 写入数据到特征值：\(characteristicId), 类型：\(writeType == .withoutResponse ? "无响应" : "有响应")")
+        
+        // 7. 执行写入操作
         peripheral.writeValue(value, for: char, type: writeType)
         
-        // 无响应写入直接返回成功（无回调）
+        // 8. 无响应写入直接返回成功（无系统回调）
         if writeType == .withoutResponse {
             let result = QXBleResult.success(
-                data: ["characteristicId": characteristicId],
+                data: [
+                    "characteristicId": characteristicId,
+                    "value": value.hexString
+                ],
                 message: "已发送写入指令（无响应）"
             )
             callback?.onSuccess(result)
@@ -305,30 +319,48 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     }
     
     /// 写入特征值回调
-    /// 当成功写入数据到特征值或写入失败时调用
+    /// 当成功写入数据到特征值或写入失败时调用（仅withResponse类型会触发）
     /// - Parameters:
     ///   - peripheral: 蓝牙外设实例
     ///   - characteristic: 写入的特征
     ///   - error: 写入操作的错误信息（如果有）
     public func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         let deviceId = peripheral.identifier.uuidString
+        let characteristicId = characteristic.uuid.uuidString
         let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.writeCharacteristic.prefix, deviceId: deviceId)
+        
         // 获取回调对象
-        guard let callback = callbacks[callbackKey] else { return }
+        guard let callback = callbacks[callbackKey] else {
+            print("⚠️ 未找到写入回调：\(callbackKey)")
+            return
+        }
+        
         // 处理写入结果
         if let error = error {
+            // 写入失败
             let errorMsg = "写入特征值失败：\(error.localizedDescription)"
+            print("❌ \(errorMsg)")
             callback?.onFail(QXBleResult.failure(errorCode: .unknownError, customMessage: errorMsg))
         } else {
+            // 写入成功
+            // 优先使用缓存的数据，因为characteristic.value可能为nil
+            let dataCacheKey = "\(deviceId)_\(characteristicId)"
+            let writtenData = lastWrittenDataCache[dataCacheKey]
+            
             let result = QXBleResult.success(
                 data: [
-                    "characteristicId": characteristic.uuid.uuidString,
-                    "value": characteristic.value?.base64EncodedString() ?? ""
+                    "characteristicId": characteristicId,
+                    "value": writtenData?.hexString ?? "[]"
                 ],
                 message: "写入特征值成功"
             )
+            print("✅ 写入特征值成功：\(characteristicId), 数据：\(writtenData?.hexString ?? "[]")")
             callback?.onSuccess(result)
+            
+            // 清理缓存的写入数据
+            lastWrittenDataCache.removeValue(forKey: dataCacheKey)
         }
+        
         // 清理回调
         removeCallback(forKey: callbackKey)
     }
@@ -417,6 +449,10 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
         servicesCache.removeAll()
         print("🧹 已清理服务缓存")
         
+        // 清理写入数据缓存
+        lastWrittenDataCache.removeAll()
+        print("🧹 已清理写入数据缓存")
+        
         // 清理所有回调
         callbacks.removeAll()
         characteristicValueUpdateCallback = nil
@@ -436,10 +472,8 @@ extension Data {
         if self.isEmpty {
             return "[]"
         }
-        
         // 将每个字节转换为2位16进制字符串
         let hexBytes = self.map { String(format: "%02hhx", $0) }
-        
         // 用", "连接所有字节，并包裹中括号
         return "[\(hexBytes.joined(separator: ", "))]"
     }
