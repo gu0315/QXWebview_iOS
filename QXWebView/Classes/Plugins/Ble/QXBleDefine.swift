@@ -406,6 +406,155 @@ public class QXBleUtils {
             print("无法打开设置页面：系统不支持")
         }
     }
+    
+    // MARK: - 数据类型转换方法
+    
+    /// 数据类型枚举
+    public enum DataType: String {
+        case base64 = "BASE64"
+        case buffer = "BUFFER"
+        case hex = "HEX"
+        case hex16 = "16进制"
+        case utf8 = "UTF8"
+        case text = "TEXT"
+        
+        /// 从字符串创建数据类型（不区分大小写）
+        public static func from(_ string: String?) -> DataType {
+            guard let str = string?.uppercased() else { return .utf8 }
+            return DataType(rawValue: str) ?? .utf8
+        }
+    }
+    
+    /// 将任意类型的value转换为Data
+    /// - Parameters:
+    ///   - value: 原始数据（可以是String、[Int]等）
+    ///   - type: 数据类型（BASE64/BUFFER/HEX/UTF8等）
+    /// - Returns: 转换后的Data，失败返回nil
+    public static func convertToData(value: Any?, type: DataType) -> Data? {
+        guard let value = value else {
+            print("❌ 数据为空")
+            return nil
+        }
+        
+        switch type {
+        case .base64:
+            return parseBase64(value)
+            
+        case .buffer:
+            return parseBuffer(value)
+            
+        case .hex, .hex16:
+            return parseHex(value)
+            
+        case .utf8, .text:
+            return parseUTF8(value)
+        }
+    }
+    
+    /// 解析Base64格式数据
+    private static func parseBase64(_ value: Any) -> Data? {
+        guard let valueStr = value as? String, !valueStr.isEmpty else {
+            print("❌ Base64数据为空")
+            return nil
+        }
+        
+        guard let data = Data(base64Encoded: valueStr) else {
+            print("❌ Base64数据解析失败：\(valueStr)")
+            return nil
+        }
+        
+        return data
+    }
+    
+    /// 解析BUFFER格式数据（支持[Int]/JSON数组字符串/逗号分隔字符串）
+    private static func parseBuffer(_ value: Any) -> Data? {
+        var intArray = [Int]()
+        
+        // 处理数组类型：前端Array.from(Uint8Array)传入的[104,101]
+        if let array = value as? [Int] {
+            intArray = array
+        }
+        // 处理字符串类型：JSON数组"[104,101]" / 逗号分隔"104,101"
+        else if let valueStr = value as? String, !valueStr.isEmpty {
+            let trimmed = valueStr.trimmingCharacters(in: .whitespacesAndNewlines)
+            let content = trimmed.starts(with: "[") && trimmed.hasSuffix("]")
+                ? String(trimmed.dropFirst().dropLast())
+                : trimmed
+            intArray = content.components(separatedBy: ",").compactMap {
+                Int($0.trimmingCharacters(in: .whitespaces))
+            }
+        }
+        
+        // 空数组/解析失败校验
+        guard !intArray.isEmpty else {
+            print("❌ BUFFER数据解析后为空/类型不支持：\(type(of: value))")
+            return nil
+        }
+        
+        // Uint8范围校验（0-255）+ 转Data
+        var bufferData = Data(capacity: intArray.count)
+        for (index, intVal) in intArray.enumerated() {
+            guard intVal >= 0 && intVal <= 255 else {
+                print("❌ BUFFER第\(index)位值\(intVal)超出Uint8范围(0-255)")
+                return nil
+            }
+            bufferData.append(UInt8(intVal))
+        }
+        
+        return bufferData
+    }
+    
+    /// 解析16进制格式数据（兼容空格、大小写）
+    private static func parseHex(_ value: Any) -> Data? {
+        guard let valueStr = value as? String, !valueStr.isEmpty else {
+            print("❌ 16进制数据为空")
+            return nil
+        }
+        
+        let cleanedHex = valueStr.replacingOccurrences(of: " ", with: "").uppercased()
+        
+        guard cleanedHex.count % 2 == 0 else {
+            print("❌ 16进制数据长度不合法（非偶数）：\(valueStr)")
+            return nil
+        }
+        
+        let length = cleanedHex.count / 2
+        var hexData = Data(capacity: length)
+        
+        for i in 0..<length {
+            let start = cleanedHex.index(cleanedHex.startIndex, offsetBy: i*2)
+            let end = cleanedHex.index(start, offsetBy: 2)
+            guard let byte = UInt8(cleanedHex[start..<end], radix: 16) else {
+                print("❌ 16进制解析失败：\(cleanedHex[start..<end])")
+                return nil
+            }
+            hexData.append(byte)
+        }
+        
+        return hexData
+    }
+    
+    /// 解析UTF8/文本格式数据
+    private static func parseUTF8(_ value: Any) -> Data? {
+        guard let valueStr = value as? String, !valueStr.isEmpty else {
+            print("❌ UTF8数据为空")
+            return nil
+        }
+        
+        guard let data = valueStr.data(using: .utf8) else {
+            print("❌ UTF8数据解析失败：\(valueStr)")
+            return nil
+        }
+        
+        return data
+    }
+    
+    /// 将Data转换为16进制字符串（用于日志打印）
+    /// - Parameter data: 原始数据
+    /// - Returns: 16进制字符串（空格分隔）
+    public static func dataToHexString(_ data: Data) -> String {
+        return data.map { String(format: "%02X", $0) }.joined(separator: " ")
+    }
 }
 
 // MARK: - 回调结果构造器
