@@ -285,7 +285,7 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     ///             - deviceId: 设备唯一标识（UUID字符串）
     ///   - callback: 连接结果回调
     private func createBLEConnection(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 必传参数校验：deviceId
+        // 1. 必传参数校验：deviceId
         guard let deviceId = params["deviceId"] as? String else {
             callback.onFail(QXBleResult.failure(
                 errorCode: .unknownError,
@@ -294,11 +294,23 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        // 生成连接操作的唯一回调Key
+        // 2. 连接前先停止扫描（避免扫描和连接同时进行导致资源竞争）
+        let centralManager = QXBleCentralManager.shared
+        if centralManager.centralManager.isScanning {
+            print("🛑 检测到正在扫描，先停止扫描再连接设备")
+            // 停止扫描
+            centralManager.centralManager.stopScan()
+            // 清理扫描相关的回调（避免内存泄漏）
+            let scanCallbackKey = QXBleUtils.generateCallbackKey(prefix: QXBLEventType.onBluetoothDeviceFound.rawValue)
+            centralManager.callbacks.removeValue(forKey: scanCallbackKey)
+            print("✅ 已停止扫描，准备连接设备")
+        }
+        
+        // 3. 生成连接操作的唯一回调Key
         let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBLEventType.connectBluetoothDevice.rawValue, deviceId: deviceId)
         
-        // 调用中心管理器连接设备
-        QXBleCentralManager.shared.connectPeripheral(
+        // 4. 调用中心管理器连接设备
+        centralManager.connectPeripheral(
             deviceId: deviceId,
             callbackKey: callbackKey,
             callback: callback
@@ -428,10 +440,20 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         print("📤 准备写入数据：\(finalData.hexString)")
         
         // 6. 设备连接状态校验
-        guard let peripheral = QXBleCentralManager.shared.connectedPeripherals[deviceId] else {
-            callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound))
+        print("🔍 检查设备连接状态，deviceId: \(deviceId)")
+        print("🔍 当前连接设备：\(QXBleCentralManager.shared.currentConnectedPeripheral?.name ?? "无")")
+        
+        guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
+              peripheral.identifier.uuidString == deviceId else {
+            print("❌ 设备未连接或未找到：\(deviceId)")
+            callback.onFail(QXBleResult.failure(
+                errorCode: .deviceNotFound,
+                customMessage: "设备未连接，请先连接设备"
+            ))
             return
         }
+        
+        print("✅ 找到已连接设备：\(peripheral.name ?? "未知")")
         
         // 7. 调用外设管理器写入数据
         QXBlePeripheralManager.shared.writeValue(
@@ -460,10 +482,17 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         }
         
         // 设备连接状态校验
-        guard let peripheral = QXBleCentralManager.shared.connectedPeripherals[deviceId] else {
-            callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound))
+        guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
+              peripheral.identifier.uuidString == deviceId else {
+            print("❌ 获取服务失败：设备未连接 (\(deviceId))")
+            callback.onFail(QXBleResult.failure(
+                errorCode: .deviceNotFound,
+                customMessage: "设备未连接，请先连接设备"
+            ))
             return
         }
+        
+        print("🔍 开始获取设备服务：\(peripheral.name ?? "未知") (\(deviceId))")
         
         // 生成服务发现回调Key并注册
         let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.getBLEDeviceServices.prefix, deviceId: deviceId)
@@ -491,7 +520,8 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         }
         
         // 设备连接状态校验
-        guard let peripheral = QXBleCentralManager.shared.connectedPeripherals[deviceId] else {
+        guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
+              peripheral.identifier.uuidString == deviceId else {
             callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound))
             return
         }
@@ -537,7 +567,8 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         }
         
         // 设备连接状态校验
-        guard let peripheral = QXBleCentralManager.shared.connectedPeripherals[deviceId] else {
+        guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
+              peripheral.identifier.uuidString == deviceId else {
             callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound))
             return
         }
