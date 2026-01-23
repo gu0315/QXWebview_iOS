@@ -43,7 +43,7 @@ class ViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
     
-    let homeChargingUrl = "http://192.168.31.137:5173/"
+    let homeChargingUrl = "http://192.168.5.71:5173/"
     
     let publicChargingUrl = "https://fr.dongxie.top/fr/#/?latitude=31.27109971007839&longitude=118.36288282976672"
     

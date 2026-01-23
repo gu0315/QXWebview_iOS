@@ -511,7 +511,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
                 if QXBleUtils.getCallbackTypePrefix(from: key) == QXBLEventType.onBluetoothDeviceFound.prefix {
                     let params: [String: Any] = [
                         "name": peripheral.name ?? "",
-                        "rssi": RSSI.intValue,
+                        "RSSI": RSSI.intValue,
                         "deviceId": deviceId,
                         "eventName": "onBluetoothDeviceFound"
                     ]

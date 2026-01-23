@@ -365,58 +365,101 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        // 2. 数据参数校验
-        guard let valueStr = params["value"] as? String, !valueStr.isEmpty else {
-            callback.onFail(QXBleResult.failure(
-                errorCode: .unknownError,
-                customMessage: "value参数为空"
-            ))
-            return
-        }
-        
-        // 3. 获取数据类型（默认UTF8）
+        // 2. 获取数据和类型（BUFFER类型value非字符串，单独处理）
+        let value = params["value"]
         let valueType = (params["valueType"] as? String)?.uppercased() ?? "UTF8"
         
-        // 4. 根据类型解析数据
+        // 3. 根据类型解析数据
         var valueData: Data?
         switch valueType {
         case "BASE64":
             // Base64格式解析
+            guard let valueStr = value as? String, !valueStr.isEmpty else {
+                print("❌ Base64数据为空")
+                valueData = nil
+                break
+            }
             valueData = Data(base64Encoded: valueStr)
             if valueData == nil {
                 print("❌ Base64数据解析失败：\(valueStr)")
             }
 
-        case "HEX", "16进制":
-            // 16进制格式解析（兼容空格、大小写）
-            let cleanedHex = valueStr.replacingOccurrences(of: " ", with: "").uppercased()
-            
-            // 校验16进制字符串长度
-            guard cleanedHex.count % 2 == 0 else {
-                print("❌ 16进制数据长度不合法：\(valueStr)")
+        case "BUFFER":
+            // BUFFER类型解析：支持[Int]/JSON数组字符串/逗号分隔字符串，内置Uint8范围校验
+            guard let value = value else {
+                print("❌ BUFFER数据为空")
                 valueData = nil
                 break
             }
+            var intArray = [Int]()
+            // 处理数组类型：前端Array.from(Uint8Array)传入的[104,101]
+            if let array = value as? [Int] {
+                intArray = array
+            }
+            // 处理字符串类型：JSON数组"[104,101]" / 逗号分隔"104,101"
+            else if let valueStr = value as? String, !valueStr.isEmpty {
+                let trimmed = valueStr.trimmingCharacters(in: .whitespacesAndNewlines)
+                let content = trimmed.starts(with: "[") && trimmed.hasSuffix("]")
+                    ? String(trimmed.dropFirst().dropLast())
+                    : trimmed
+                intArray = content.components(separatedBy: ",").compactMap {
+                    Int($0.trimmingCharacters(in: .whitespaces))
+                }
+            }
+            // 空数组/解析失败校验
+            guard !intArray.isEmpty else {
+                print("❌ BUFFER数据解析后为空/类型不支持：\(type(of: value))")
+                valueData = nil
+                break
+            }
+            // Uint8范围校验（0-255）+ 转Data
+            var bufferData = Data(capacity: intArray.count)
+            var isLegal = true
+            for (index, intVal) in intArray.enumerated() {
+                guard intVal >= 0 && intVal <= 255 else {
+                    print("❌ BUFFER第\(index)位值\(intVal)超出Uint8范围(0-255)")
+                    isLegal = false
+                    break
+                }
+                bufferData.append(UInt8(intVal))
+            }
+            valueData = isLegal ? bufferData : nil
             
+        case "HEX", "16进制":
+            // 16进制格式解析（兼容空格、大小写）
+            guard let valueStr = value as? String, !valueStr.isEmpty else {
+                print("❌ 16进制数据为空")
+                valueData = nil
+                break
+            }
+            let cleanedHex = valueStr.replacingOccurrences(of: " ", with: "").uppercased()
+            guard cleanedHex.count % 2 == 0 else {
+                print("❌ 16进制数据长度不合法（非偶数）：\(valueStr)")
+                valueData = nil
+                break
+            }
             let length = cleanedHex.count / 2
-            var data = Data(capacity: length)
-            
-            // 逐字节解析
+            var hexData = Data(capacity: length)
+            var isHexLegal = true
             for i in 0..<length {
                 let start = cleanedHex.index(cleanedHex.startIndex, offsetBy: i*2)
                 let end = cleanedHex.index(start, offsetBy: 2)
-                if let byte = UInt8(cleanedHex[start..<end], radix: 16) {
-                    data.append(byte)
-                } else {
-                    print("❌ 16进制数据解析失败：\(cleanedHex[start..<end])")
-                    data = Data()
+                guard let byte = UInt8(cleanedHex[start..<end], radix: 16) else {
+                    print("❌ 16进制解析失败：\(cleanedHex[start..<end])")
+                    isHexLegal = false
                     break
                 }
+                hexData.append(byte)
             }
-            valueData = data.count > 0 ? data : nil
+            valueData = isHexLegal ? hexData : nil
             
         case "UTF8", "TEXT":
-            // UTF8/文本格式解析（默认）
+            // UTF8/文本格式解析
+            guard let valueStr = value as? String, !valueStr.isEmpty else {
+                print("❌ UTF8数据为空")
+                valueData = nil
+                break
+            }
             valueData = valueStr.data(using: .utf8)
             if valueData == nil {
                 print("❌ UTF8数据解析失败：\(valueStr)")
@@ -425,24 +468,30 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         default:
             // 未知类型：默认按UTF8解析
             print("⚠️ 未知的valueType：\(valueType)，默认按UTF8解析")
+            guard let valueStr = value as? String else {
+                print("❌ 未知类型数据非字符串，解析失败")
+                valueData = nil
+                break
+            }
             valueData = valueStr.data(using: .utf8)
         }
 
-        // 5. 数据解析结果校验
+        // 4. 数据解析结果最终校验
         guard let finalData = valueData, !finalData.isEmpty else {
             callback.onFail(QXBleResult.failure(
                 errorCode: .unknownError,
-                customMessage: "数据解析失败：value=\(valueStr)，type=\(valueType)"
+                customMessage: "数据解析失败：value=\(String(describing: value))，type=\(valueType)"
             ))
             return
         }
         
-        print("📤 准备写入数据：\(finalData.hexString)")
+        // 打印写入数据（转16进制，内置实现无需扩展）
+        let hexStr = finalData.map { String(format: "%02X", $0) }.joined(separator: " ")
+        print("📤 准备写入数据【\(valueType)】：\(hexStr)（长度：\(finalData.count)字节）")
         
-        // 6. 设备连接状态校验
+        // 5. 设备连接状态校验
         print("🔍 检查设备连接状态，deviceId: \(deviceId)")
         print("🔍 当前连接设备：\(QXBleCentralManager.shared.currentConnectedPeripheral?.name ?? "无")")
-        
         guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
               peripheral.identifier.uuidString == deviceId else {
             print("❌ 设备未连接或未找到：\(deviceId)")
@@ -452,10 +501,9 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             ))
             return
         }
+        print("✅ 找到已连接设备：\(peripheral.name ?? "未知设备")")
         
-        print("✅ 找到已连接设备：\(peripheral.name ?? "未知")")
-        
-        // 7. 调用外设管理器写入数据
+        // 6. 调用外设管理器写入数据
         QXBlePeripheralManager.shared.writeValue(
             deviceId: deviceId,
             peripheral: peripheral,
