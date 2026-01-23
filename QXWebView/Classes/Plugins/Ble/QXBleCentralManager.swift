@@ -179,7 +179,6 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             callback.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen))
             return
         }
-        
         // 注册连接回调
         callbacks[callbackKey] = callback
         
@@ -189,7 +188,6 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             callbacks.removeValue(forKey: callbackKey)
             return
         }
-        
         // 已连接直接返回成功
         if peripheral.state == .connected {
             updateCurrentConnectedPeripheral(peripheral)
@@ -205,24 +203,19 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             return
         }
         
-        // 单设备连接模式：连接新设备前先断开旧设备
+        // 连接新设备前先断开旧设备
         if let currentPeripheral = currentConnectedPeripheral, 
            currentPeripheral.identifier.uuidString != deviceId {
             print("🔄 检测到已有连接，先断开旧设备：\(currentPeripheral.name ?? "未知")")
-            
-
             // 断开旧设备
             let oldDeviceId = currentPeripheral.identifier.uuidString
             centralManager.cancelPeripheralConnection(currentPeripheral)
-            
             // 清理旧设备状态
             cleanPeripheralConnectionState(deviceId: oldDeviceId)
-            
             print("✅ 已断开旧设备，准备连接新设备")
         }
         
         print("📱 当前已连接设备：\(currentConnectedPeripheral?.name ?? "无")")
-        
         // 设置外设代理（处理服务/特征发现）
         peripheral.delegate = QXBlePeripheralManager.shared
     
@@ -234,25 +227,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         ]
         
         print("🔗 开始连接设备：\(peripheral.name ?? "未知") (\(deviceId))")
-        
         // 发起连接
         centralManager.connect(peripheral, options: connectOptions)
-        
-        // 创建可取消的连接超时任务（15秒）
-        let timeoutTask = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            
-            // 检查设备是否仍未连接
-            if peripheral.state != .connected {
-                print("⏰ 连接超时：\(peripheral.name ?? "未知") (\(deviceId))")
-                self.centralManager.cancelPeripheralConnection(peripheral)
-                callback.onFail(QXBleResult.failure(errorCode: .connectTimeout))
-                self.callbacks.removeValue(forKey: callbackKey)
-            }
-        }
-
-        // 15秒后执行超时任务
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15.0, execute: timeoutTask)
+    
     }
     
     /// 更新当前连接设备状态（内部方法）
@@ -264,7 +241,6 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         // 更新当前连接设备
         currentConnectedPeripheral = peripheral
         currentConnectedDeviceId = deviceId
-        
         print("✅ 设备已设为当前连接：\(peripheral.name ?? "未知") (\(deviceId))")
     }
     
@@ -278,7 +254,6 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         callbacks[callbackKey] = callback
         
         print("🔌 准备断开设备：\(deviceId)")
-        
         // 检查是否是当前连接的设备
         if let peripheral = currentConnectedPeripheral, peripheral.identifier.uuidString == deviceId {
             if peripheral.state == .connected {
@@ -324,31 +299,23 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         if centralManager.isScanning {
             centralManager.stopScan()
         }
-        
         print("✅ 已取消连接超时任务")
-        
         // 断开当前连接的设备
         if let peripheral = currentConnectedPeripheral, peripheral.state == .connected {
             centralManager.cancelPeripheralConnection(peripheral)
         }
-        
         // 清理所有连接状态
         currentConnectedPeripheral = nil
         currentConnectedDeviceId = nil
-        
         // 清理发现的设备列表
         discoveredPeripherals.removeAll()
-        
         // 清理设备 RSSI 缓存
         deviceRSSICache.removeAll()
-        
         // 清理所有回调缓存
         callbacks.removeAll()
         permissionCallback = nil
-        
         // 清理外设管理器的缓存
         QXBlePeripheralManager.shared.clearAllCaches()
-        
         // 重置蓝牙状态
         state = .unknown
         
@@ -565,19 +532,11 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - peripheral: 已连接的蓝牙外设
     public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let deviceId = peripheral.identifier.uuidString
-        
         print("✅ 设备连接成功：\(peripheral.name ?? "未知") (\(deviceId))")
         print("📊 设备连接状态：\(peripheral.state.rawValue) (\(peripheral.state.description))")
-        
-        print("✅ 已取消连接超时任务")
-        
         // 立即更新连接状态（确保后续操作能找到设备）
         updateCurrentConnectedPeripheral(peripheral)
-        
-        print("📝 已更新连接状态")
-        
         // 立即触发连接成功回调（不延迟，避免影响后续操作）
-        print("✅ 立即触发连接成功回调")
         triggerConnectionCallback(deviceId: deviceId, isSuccess: true, peripheral: peripheral)
     }
     
@@ -589,19 +548,16 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - error: 连接失败的错误信息
     public func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         let deviceId = peripheral.identifier.uuidString
-        
         print("❌ 设备连接失败：\(peripheral.name ?? "未知") (\(deviceId))")
         if let error = error {
             print("❌ 失败原因：\(error.localizedDescription)")
         }
-        
         print("✅ 已取消连接超时任务")
-        
         // 查找并触发连接失败回调
         triggerConnectionCallback(deviceId: deviceId, isSuccess: false, error: error)
     }
     
-    /// 触发连接回调（内部方法）
+    /// 触发连接回调
     /// - Parameters:
     ///   - deviceId: 设备ID
     ///   - isSuccess: 是否连接成功
@@ -614,9 +570,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             let extractedDeviceId = QXBleUtils.getDeviceId(from: key)
             return prefix == QXBLEventType.connectBluetoothDevice.prefix && extractedDeviceId == deviceId
         }
-        
         guard let (key, callback) = targetCallback else { return }
-        
         if isSuccess, let peripheral = peripheral {
             // 连接成功
             let result = QXBleResult.success(
@@ -632,7 +586,11 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             let errorMsg = error?.localizedDescription ?? "设备连接失败"
             callback?.onFail(QXBleResult.failure(errorCode: .unknownError, customMessage: errorMsg))
         }
-        
+        let params: [String: Any] = [
+            "eventName": "onBLEConnectionStateChange",
+            "isConnected": isSuccess
+        ]
+        callJSWithPluginName("QXBlePlugin", params: params) { _, _ in }
         // 清理回调缓存
         callbacks.removeValue(forKey: key)
     }
@@ -645,7 +603,6 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - error: 断开连接的错误信息（如果有）
     public func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         let deviceId = peripheral.identifier.uuidString
-        
         if let error = error {
             // 异常断开（系统或设备主动断开）
             print("⚠️ 设备异常断开：\(peripheral.name ?? "未知") (\(deviceId))")
@@ -654,7 +611,6 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             // 正常断开（用户主动断开）
             print("🔌 设备正常断开：\(peripheral.name ?? "未知") (\(deviceId))")
         }
-        
         // 清理连接状态
         cleanPeripheralConnectionState(deviceId: deviceId)
         
@@ -676,13 +632,17 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
                 let result = QXBleResult.success(message: "设备已断开连接")
                 callback?.onSuccess(result)
             }
-            
             // 清理回调缓存
             callbacks.removeValue(forKey: key)
         } else {
             // 没有断开回调，说明是被动断开（设备主动断开或信号丢失）
             print("⚠️ 设备被动断开，无对应回调")
         }
+        let params: [String: Any] = [
+            "eventName": "onBLEConnectionStateChange",
+            "isConnected": false
+        ]
+        callJSWithPluginName("QXBlePlugin", params: params) { _, _ in }
     }
 }
 
