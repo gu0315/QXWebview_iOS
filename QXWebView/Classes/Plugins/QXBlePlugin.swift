@@ -293,8 +293,12 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        // 2. 连接前先停止扫描（避免扫描和连接同时进行导致资源竞争）
         let centralManager = QXBleCentralManager.shared
+        
+        // 2. 取消所有正在进行的重连任务（防止旧设备重连干扰新连接）
+        centralManager.cancelAllReconnections()
+        
+        // 3. 连接前先停止扫描（避免扫描和连接同时进行导致资源竞争）
         if centralManager.centralManager.isScanning {
             print("🛑 检测到正在扫描，先停止扫描再连接设备")
             // 停止扫描
@@ -305,10 +309,10 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             print("✅ 已停止扫描，准备连接设备")
         }
         
-        // 3. 生成连接操作的唯一回调Key
+        // 4. 生成连接操作的唯一回调Key
         let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBLEventType.connectBluetoothDevice.rawValue, deviceId: deviceId)
         
-        // 4. 调用中心管理器连接设备
+        // 5. 调用中心管理器连接设备
         centralManager.connectPeripheral(
             deviceId: deviceId,
             callbackKey: callbackKey,

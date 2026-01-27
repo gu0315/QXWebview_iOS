@@ -50,6 +50,21 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     /// 权限请求专用回调
     private var permissionCallback: JDBridgeCallBack?
     
+    // MARK: - 重连管理
+    /// 是否为主动断开连接（用于区分主动断开和异常断开）
+    private var isIntentionalDisconnect: Bool = false
+    
+    /// 重连配置
+    private struct ReconnectionConfig {
+        static let maxAttempts = 3                      // 最大重连次数
+        static let initialDelay: TimeInterval = 2.0     // 首次重连延迟（秒）
+        static let delayMultiplier: TimeInterval = 1.5  // 延迟倍增系数
+    }
+    
+    /// 重连状态跟踪
+    private var reconnectionAttempts: [String: Int] = [:]             // key: deviceId, value: 当前重连次数
+    private var reconnectionTimers: [String: DispatchWorkItem] = [:]  // key: deviceId, value: 重连定时器
+    
     // MARK: - 初始化
     /// 初始化蓝牙中心管理器
     /// - Parameter permissionCallback: 权限请求结果回调
@@ -181,6 +196,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             callback.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen))
             return
         }
+        
         // 注册连接回调
         callbacks[callbackKey] = callback
         
@@ -209,6 +225,8 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         if let currentPeripheral = currentConnectedPeripheral, 
            currentPeripheral.identifier.uuidString != deviceId {
             print("🔄 检测到已有连接，先断开旧设备：\(currentPeripheral.name ?? "未知")")
+            // 标记为主动断开（防止触发重连）
+            isIntentionalDisconnect = true
             // 断开旧设备
             let oldDeviceId = currentPeripheral.identifier.uuidString
             centralManager.cancelPeripheralConnection(currentPeripheral)
@@ -256,6 +274,13 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         callbacks[callbackKey] = callback
         
         print("🔌 准备断开设备：\(deviceId)")
+        
+        // 标记为主动断开（防止自动重连）
+        isIntentionalDisconnect = true
+        
+        // 取消该设备的重连任务
+        cancelReconnection(for: deviceId)
+        
         // 检查是否是当前连接的设备
         if let peripheral = currentConnectedPeripheral, peripheral.identifier.uuidString == deviceId {
             if peripheral.state == .connected {
@@ -291,7 +316,99 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             print("📱 已清空当前设备")
         }
         
+        // 清理重连状态
+        reconnectionAttempts.removeValue(forKey: deviceId)
+        cancelReconnection(for: deviceId)
         print("✅ 已清理设备连接状态：\(deviceId)")
+    }
+    
+    // MARK: - 重连管理
+    /// 尝试重新连接设备
+    /// - Parameters:
+    ///   - peripheral: 需要重连的外设
+    ///   - attempt: 当前重连尝试次数
+    private func attemptReconnection(peripheral: CBPeripheral, attempt: Int) {
+        let deviceId = peripheral.identifier.uuidString
+        // 检查是否超过最大重连次数
+        guard attempt <= ReconnectionConfig.maxAttempts else {
+            print("❌ 设备重连失败，已达最大重连次数：\(peripheral.name ?? "未知") (\(deviceId))")
+            reconnectionAttempts.removeValue(forKey: deviceId)
+            // 通知JS端重连失败（使用 onBLEConnectionStateChange 事件）
+            let params: [String: Any] = [
+                "eventName": "onBLEConnectionStateChange",
+                "deviceId": deviceId,
+                "deviceName": peripheral.name ?? "未知设备",
+                "isConnected": false,
+                "reconnectionFailed": true,
+                "reason": "已达最大重连次数"
+            ]
+            callJSWithPluginName("QXBlePlugin", params: params) { _, _ in }
+            return
+        }
+        // 计算延迟时间（指数退避）
+        let delay = ReconnectionConfig.initialDelay * pow(ReconnectionConfig.delayMultiplier, Double(attempt - 1))
+        print("🔄 准备第\(attempt)次重连设备：\(peripheral.name ?? "未知") (\(deviceId))，延迟\(String(format: "%.1f", delay))秒")
+        // 创建延迟重连任务
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            // 检查蓝牙状态
+            guard self.state == .poweredOn else {
+                print("⚠️ 蓝牙未开启，取消重连")
+                self.reconnectionAttempts.removeValue(forKey: deviceId)
+                // 通知JS端重连失败
+                let params: [String: Any] = [
+                    "eventName": "onBLEConnectionStateChange",
+                    "deviceId": deviceId,
+                    "deviceName": peripheral.name ?? "未知设备",
+                    "isConnected": false,
+                    "reconnectionFailed": true,
+                    "reason": "蓝牙未开启"
+                ]
+                self.callJSWithPluginName("QXBlePlugin", params: params) { _, _ in }
+                return
+            }
+            // 检查设备是否已连接（可能在延迟期间已手动连接）
+            if peripheral.state == .connected {
+                print("✅ 设备已连接，取消重连任务")
+                self.reconnectionAttempts.removeValue(forKey: deviceId)
+                return
+            }
+            print("🔗 开始第\(attempt)次重连：\(peripheral.name ?? "未知")")
+            // 更新重连次数
+            self.reconnectionAttempts[deviceId] = attempt
+            // 发起重连
+            let connectOptions: [String: Any] = [
+                CBConnectPeripheralOptionNotifyOnConnectionKey: true,
+                CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
+                CBConnectPeripheralOptionStartDelayKey: 0
+            ]
+            self.centralManager.connect(peripheral, options: connectOptions)
+        }
+        // 保存定时器引用
+        reconnectionTimers[deviceId] = workItem
+        // 延迟执行重连
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+    
+    /// 取消设备的重连任务
+    /// - Parameter deviceId: 设备ID
+    private func cancelReconnection(for deviceId: String) {
+        if let timer = reconnectionTimers[deviceId] {
+            timer.cancel()
+            reconnectionTimers.removeValue(forKey: deviceId)
+            print("✅ 已取消设备重连任务：\(deviceId)")
+        }
+        reconnectionAttempts.removeValue(forKey: deviceId)
+    }
+    
+    /// 取消所有正在进行的重连任务
+    public func cancelAllReconnections() {
+        guard !reconnectionTimers.isEmpty else { return }
+        print("🛑 取消所有重连任务（共\(reconnectionTimers.count)个）")
+        reconnectionTimers.values.forEach { $0.cancel() }
+        reconnectionTimers.removeAll()
+        reconnectionAttempts.removeAll()
+        print("✅ 已取消所有重连任务")
     }
     
     // MARK: - 蓝牙适配器管理
@@ -302,6 +419,10 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             centralManager.stopScan()
         }
         print("✅ 已取消连接超时任务")
+        
+        // 标记为主动断开（防止触发重连）
+        isIntentionalDisconnect = true
+        
         // 断开当前连接的设备
         if let peripheral = currentConnectedPeripheral, peripheral.state == .connected {
             centralManager.cancelPeripheralConnection(peripheral)
@@ -316,6 +437,15 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         // 清理所有回调缓存
         callbacks.removeAll()
         permissionCallback = nil
+        
+        // 清理所有重连任务
+        reconnectionAttempts.removeAll()
+        reconnectionTimers.values.forEach { $0.cancel() }
+        reconnectionTimers.removeAll()
+        
+        // 重置主动断开标志
+        isIntentionalDisconnect = false
+        
         // 清理外设管理器的缓存
         QXBlePeripheralManager.shared.clearAllCaches()
         // 重置蓝牙状态
@@ -489,9 +619,6 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - advertisementData: 设备广播数据
     ///   - RSSI: 设备信号强度（单位：dBm，负值越小信号越强）
     public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        
-        
-  
         // 1. 过滤无名称设备（可选，根据业务需求决定是否过滤）
         guard peripheral.name != nil else {
             return
@@ -543,10 +670,35 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - peripheral: 已连接的蓝牙外设
     public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let deviceId = peripheral.identifier.uuidString
-        print("✅ 设备连接成功：\(peripheral.name ?? "未知") (\(deviceId))")
+        
+        // 检查是否为重连成功
+        let isReconnection = reconnectionAttempts[deviceId] != nil
+        let attemptCount = reconnectionAttempts[deviceId] ?? 0
+        
+        if isReconnection {
+            print("✅ 设备重连成功（第\(attemptCount)次尝试）：\(peripheral.name ?? "未知") (\(deviceId))")
+            // 通知JS端重连成功（使用 onBLEConnectionStateChange 事件）
+            let params: [String: Any] = [
+                "eventName": "onBLEConnectionStateChange",
+                "deviceId": deviceId,
+                "deviceName": peripheral.name ?? "未知设备",
+                "isConnected": true,
+                "isReconnection": true,
+                "attempt": attemptCount
+            ]
+            callJSWithPluginName("QXBlePlugin", params: params) { _, _ in }
+            
+            // 清理重连状态
+            reconnectionAttempts.removeValue(forKey: deviceId)
+            cancelReconnection(for: deviceId)
+        } else {
+            print("✅ 设备连接成功：\(peripheral.name ?? "未知") (\(deviceId))")
+        }
         print("📊 设备连接状态：\(peripheral.state.rawValue) (\(peripheral.state.description))")
+        
         // 立即更新连接状态（确保后续操作能找到设备）
         updateCurrentConnectedPeripheral(peripheral)
+        
         // 立即触发连接成功回调（不延迟，避免影响后续操作）
         triggerConnectionCallback(deviceId: deviceId, isSuccess: true, peripheral: peripheral)
     }
@@ -559,13 +711,26 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - error: 连接失败的错误信息
     public func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         let deviceId = peripheral.identifier.uuidString
-        print("❌ 设备连接失败：\(peripheral.name ?? "未知") (\(deviceId))")
-        if let error = error {
-            print("❌ 失败原因：\(error.localizedDescription)")
+        
+        // 检查是否为重连失败
+        if let currentAttempt = reconnectionAttempts[deviceId] {
+            print("❌ 设备重连失败（第\(currentAttempt)次尝试）：\(peripheral.name ?? "未知") (\(deviceId))")
+            if let error = error {
+                print("❌ 失败原因：\(error.localizedDescription)")
+            }
+            
+            // 继续尝试下一次重连
+            attemptReconnection(peripheral: peripheral, attempt: currentAttempt + 1)
+        } else {
+            print("❌ 设备连接失败：\(peripheral.name ?? "未知") (\(deviceId))")
+            if let error = error {
+                print("❌ 失败原因：\(error.localizedDescription)")
+            }
+            print("✅ 已取消连接超时任务")
+            
+            // 查找并触发连接失败回调
+            triggerConnectionCallback(deviceId: deviceId, isSuccess: false, error: error)
         }
-        print("✅ 已取消连接超时任务")
-        // 查找并触发连接失败回调
-        triggerConnectionCallback(deviceId: deviceId, isSuccess: false, error: error)
     }
     
     /// 触发连接回调
@@ -614,47 +779,44 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - error: 断开连接的错误信息（如果有）
     public func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         let deviceId = peripheral.identifier.uuidString
+        // 判断是否为异常断开
+        let isUnexpectedDisconnect = error != nil && !isIntentionalDisconnect
         if let error = error {
-            // 异常断开（系统或设备主动断开）
-            print("⚠️ 设备异常断开：\(peripheral.name ?? "未知") (\(deviceId))")
-            print("⚠️ 断开原因：\(error.localizedDescription)")
+            print("⚠️ 设备异常断开：\(peripheral.name ?? "未知") (\(deviceId)) \(error.localizedDescription)")
         } else {
-            // 正常断开（用户主动断开）
             print("🔌 设备正常断开：\(peripheral.name ?? "未知") (\(deviceId))")
         }
-        // 清理连接状态
-        cleanPeripheralConnectionState(deviceId: deviceId)
-        
-        // 查找并触发断开连接回调
-        let targetCallback = callbacks.first { key, _ in
-            let prefix = QXBleUtils.getCallbackTypePrefix(from: key)
-            let extractedDeviceId = QXBleUtils.getDeviceId(from: key)
-            return prefix == "disconnect" && extractedDeviceId == deviceId
+        // 清理连接状态（但不清理重连状态，如果需要重连的话）
+        if currentConnectedDeviceId == deviceId {
+            currentConnectedPeripheral = nil
+            currentConnectedDeviceId = nil
+            print("📱 已清空当前设备")
         }
-        
-        // 如果有断开回调，触发它
-        if let (key, callback) = targetCallback {
-            if let error = error {
-                // 异常断开
-                let errorMsg = "设备异常断开：\(error.localizedDescription)"
-                callback?.onFail(QXBleResult.failure(errorCode: .unknownError, customMessage: errorMsg))
-            } else {
-                // 正常断开
-                let result = QXBleResult.success(message: "设备已断开连接")
-                callback?.onSuccess(result)
-            }
-            // 清理回调缓存
-            callbacks.removeValue(forKey: key)
-        } else {
-            // 没有断开回调，说明是被动断开（设备主动断开或信号丢失）
-            print("⚠️ 设备被动断开，无对应回调")
-        }
-        
+        // 通知JS端连接状态变化
         let params: [String: Any] = [
             "eventName": "onBLEConnectionStateChange",
-            "isConnected": false
+            "deviceId": deviceId,
+            "deviceName": peripheral.name ?? "未知设备",
+            "isConnected": false,
+            "isUnexpected": isUnexpectedDisconnect
         ]
         callJSWithPluginName("QXBlePlugin", params: params) { _, _ in }
+        // 异常断开时尝试自动重连
+        if isUnexpectedDisconnect {
+            print("🔄 检测到异常断开，准备自动重连...")
+            // 重置主动断开标志
+            isIntentionalDisconnect = false
+            // 初始化重连计数
+            reconnectionAttempts[deviceId] = 0
+            // 开始第一次重连尝试
+            attemptReconnection(peripheral: peripheral, attempt: 1)
+        } else {
+            // 正常断开，清理重连状态
+            reconnectionAttempts.removeValue(forKey: deviceId)
+            cancelReconnection(for: deviceId)
+            // 重置主动断开标志
+            isIntentionalDisconnect = false
+        }
     }
 }
 
