@@ -377,13 +377,11 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
             print("❌ 特征值更新失败：\(error.localizedDescription)")
             return
         }
-        
         // 2. 获取特征值数据
         guard let value = characteristic.value else {
             print("⚠️ 特征值为空")
             return
         }
-        
         // 3. 构造回调参数
         let params: [String: Any] = [
             "eventName": "onBLECharacteristicValueChange",
@@ -391,9 +389,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
             "characteristicId": characteristic.uuid.uuidString,
             "value": value.hexString,  // 转换为16进制字符串
         ]
-        
         print("📡 收到特征值更新：\(characteristic.uuid.uuidString), 数据：\(value.hexString)")
-        
         // 4. 调用JS回调通知前端
         callJSWithPluginName("QXBlePlugin", params: params) { _, _ in
             print("✅ 特征值变化事件已通知JS端")
@@ -462,29 +458,3 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     }
 }
 
-// MARK: - Data 扩展
-/// 扩展Data，提供16进制字符串转换功能
-extension Data {
-    /// 转换为16进制字符串（格式：[xx, xx, xx]）
-    /// 示例：Data([0x01, 0xA3, 0xFF]) -> "[01, a3, ff]"
-    var hexString: String {
-        // 空Data返回空数组字符串
-        if self.isEmpty {
-            return "[]"
-        }
-        // 将每个字节转换为2位16进制字符串
-        let hexBytes = self.map { String(format: "%02hhx", $0) }
-        // 用", "连接所有字节，并包裹中括号
-        return "[\(hexBytes.joined(separator: ", "))]"
-    }
-    
-    /// 静态方法：将Data转换为16进制字符串
-    /// - Parameter data: 要转换的Data对象（可选）
-    /// - Returns: 16进制字符串，如果data为nil则返回"null"
-    static func toHexString(_ data: Data?) -> String {
-        guard let data = data else {
-            return "null"
-        }
-        return data.hexString
-    }
-}

@@ -376,10 +376,6 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             ))
             return
         }
-        
-        let hexStr = QXBleUtils.dataToHexString(finalData)
-        print("📤 准备写入数据【\(dataType.rawValue)】：\(hexStr)（长度：\(finalData.count)字节）")
-        
         // 设备连接状态校验
         print("🔍 检查设备连接状态，deviceId: \(deviceId)")
         print("🔍 当前连接设备：\(QXBleCentralManager.shared.currentConnectedPeripheral?.name ?? "无")")

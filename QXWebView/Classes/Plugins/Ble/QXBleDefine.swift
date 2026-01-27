@@ -548,13 +548,6 @@ public class QXBleUtils {
         
         return data
     }
-    
-    /// 将Data转换为16进制字符串（用于日志打印）
-    /// - Parameter data: 原始数据
-    /// - Returns: 16进制字符串（空格分隔）
-    public static func dataToHexString(_ data: Data) -> String {
-        return data.map { String(format: "%02X", $0) }.joined(separator: " ")
-    }
 }
 
 // MARK: - 回调结果构造器

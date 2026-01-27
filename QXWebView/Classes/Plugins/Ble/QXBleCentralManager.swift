@@ -127,12 +127,14 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         discoveredPeripherals.removeAll()
         deviceRSSICache.removeAll()
         
-        // 5. 配置扫描选项：不允许重复发现同一设备（提高性能）
-        let scanOptions: [String: Any] = [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+        // 5. 配置扫描选项：不允许重复发现同一设备
+        let scanOptions: [String: Any] = [
+            CBCentralManagerScanOptionAllowDuplicatesKey: false
+        ]
         
         // 6. 开始扫描
         centralManager.scanForPeripherals(withServices: services, options: scanOptions)
-        print("开始扫描蓝牙设备，超时时间：\(timeout)秒")
+        print("开始扫描蓝牙设备")
     }
     
     /// 停止扫描蓝牙设备
@@ -487,11 +489,20 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - advertisementData: 设备广播数据
     ///   - RSSI: 设备信号强度（单位：dBm，负值越小信号越强）
     public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
+        
+        
+  
         // 1. 过滤无名称设备（可选，根据业务需求决定是否过滤）
         guard peripheral.name != nil else {
             return
         }
-    
+        
+        // 优先从广播数据中获取本地名称
+        let broadcastName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
+        // 其次获取peripheral的name属性
+        let peripheralName = peripheral.name
+        // 最终使用的名称（优先级：广播名称 > peripheral.name > 兜底值）
+        let finalDeviceName = broadcastName ?? peripheralName ?? "未知设备"
         // 2. 去重添加设备到扫描结果列表
         let deviceId = peripheral.identifier.uuidString
         let isExisted = discoveredPeripherals.contains { $0.identifier.uuidString == deviceId }
@@ -510,7 +521,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
                 // 检查是否为设备发现回调
                 if QXBleUtils.getCallbackTypePrefix(from: key) == QXBLEventType.onBluetoothDeviceFound.prefix {
                     let params: [String: Any] = [
-                        "name": peripheral.name ?? "",
+                        "name": finalDeviceName,
                         "RSSI": RSSI.intValue,
                         "deviceId": deviceId,
                         "eventName": "onBluetoothDeviceFound"
@@ -638,6 +649,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             // 没有断开回调，说明是被动断开（设备主动断开或信号丢失）
             print("⚠️ 设备被动断开，无对应回调")
         }
+        
         let params: [String: Any] = [
             "eventName": "onBLEConnectionStateChange",
             "isConnected": false
