@@ -337,7 +337,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             let params: [String: Any] = [
                 "eventName": "onBLEConnectionStateChange",
                 "deviceId": deviceId,
-                "deviceName": peripheral.name ?? "未知设备",
+                "name": peripheral.name ?? "未知设备",
                 "isConnected": false,
                 "reconnectionFailed": true,
                 "reason": "已达最大重连次数"
@@ -359,7 +359,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
                 let params: [String: Any] = [
                     "eventName": "onBLEConnectionStateChange",
                     "deviceId": deviceId,
-                    "deviceName": peripheral.name ?? "未知设备",
+                    "name": peripheral.name ?? "未知设备",
                     "isConnected": false,
                     "reconnectionFailed": true,
                     "reason": "蓝牙未开启"
@@ -681,7 +681,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             let params: [String: Any] = [
                 "eventName": "onBLEConnectionStateChange",
                 "deviceId": deviceId,
-                "deviceName": peripheral.name ?? "未知设备",
+                "name": peripheral.name ?? "未知设备",
                 "isConnected": true,
                 "isReconnection": true,
                 "attempt": attemptCount
@@ -764,7 +764,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         }
         let params: [String: Any] = [
             "eventName": "onBLEConnectionStateChange",
-            "isConnected": isSuccess
+            "isConnected": isSuccess,
+            "deviceId": deviceId,
+            "name": peripheral?.name ?? "未知设备"
         ]
         callJSWithPluginName("QXBlePlugin", params: params) { _, _ in }
         // 清理回调缓存
@@ -796,7 +798,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         let params: [String: Any] = [
             "eventName": "onBLEConnectionStateChange",
             "deviceId": deviceId,
-            "deviceName": peripheral.name ?? "未知设备",
+            "name": peripheral.name ?? "未知设备",
             "isConnected": false,
             "isUnexpected": isUnexpectedDisconnect
         ]
