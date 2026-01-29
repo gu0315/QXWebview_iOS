@@ -78,6 +78,7 @@ class ViewController: UIViewController {
     // MARK: - Actions
     @objc private func homeChargingAction() {
         let vc = QXWebViewController(url: homeChargingUrl)
+        vc.hostDelegate = self
         navigationController?.pushViewController(vc, animated: true)
     }
     
@@ -87,3 +88,36 @@ class ViewController: UIViewController {
     }
 }
 
+
+extension ViewController: QXWebViewHostDelegate {
+    
+    func webViewRequestOpenPage(
+        url: String,
+        params: [String: Any]?,
+        completion: @escaping (Any?) -> Void
+    ) {
+        let safeParams = params ?? [:]
+        switch url {
+        case "app://pay":
+            // 拉起支付功能
+            // 需要宿主实现支付逻辑
+            // 调用 completion 返回支付结果（成功 / 失败 / 错误信息）
+            break
+        case "app://login":
+            // 拉起登录功能
+            // 需要宿主实现登录逻辑
+            // 调用 completion 返回登录结果（成功 / 失败 / 错误信息）
+            break
+        default:
+            // 未注册或未处理的能力
+            print("未处理的 URL: \(url)")
+        }
+    }
+    
+    // 可选
+    func webViewRequestCustomMethod(methodName: String,
+                                                   params: [String: Any]?,
+                                    completion: @escaping (Any?) -> Void) {
+        
+    }
+}

@@ -258,7 +258,7 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         )
         
         // 立即返回扫描开始的成功提示
-        callback.onSuccess(QXBleResult.success(message: "开始扫描蓝牙设备"))
+        callback.onSuccess(["errMsg": "startBluetoothDevicesDiscovery:ok"])
     }
     
     /// 停止扫描蓝牙设备

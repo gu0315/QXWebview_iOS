@@ -653,7 +653,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
                         "deviceId": deviceId,
                         "eventName": "onBluetoothDeviceFound"
                     ]
-                    
+
                     // 调用JS回调
                     callback?.callJSWithPluginName("QXBlePlugin", params: params) { _, _ in
                         print("✅ 设备发现事件已通知JS端：\(peripheral.name ?? "未知")")
@@ -684,10 +684,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
                 "name": peripheral.name ?? "未知设备",
                 "isConnected": true,
                 "isReconnection": true,
-                "attempt": attemptCount
+                "attempt": attemptCount,
             ]
             callJSWithPluginName("QXBlePlugin", params: params) { _, _ in }
-            
             // 清理重连状态
             reconnectionAttempts.removeValue(forKey: deviceId)
             cancelReconnection(for: deviceId)
@@ -718,7 +717,6 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             if let error = error {
                 print("❌ 失败原因：\(error.localizedDescription)")
             }
-            
             // 继续尝试下一次重连
             attemptReconnection(peripheral: peripheral, attempt: currentAttempt + 1)
         } else {
@@ -727,7 +725,6 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
                 print("❌ 失败原因：\(error.localizedDescription)")
             }
             print("✅ 已取消连接超时任务")
-            
             // 查找并触发连接失败回调
             triggerConnectionCallback(deviceId: deviceId, isSuccess: false, error: error)
         }

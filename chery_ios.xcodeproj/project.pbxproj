@@ -13,7 +13,6 @@
 		E6B5BFD82E9A1CCB00233959 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = E6B5BFD22E9A1CCB00233959 /* Main.storyboard */; };
 		E6B5BFD92E9A1CCB00233959 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6B5BFCB2E9A1CCB00233959 /* AppDelegate.swift */; };
 		E6B5BFDB2E9A1CCB00233959 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6B5BFD32E9A1CCB00233959 /* ViewController.swift */; };
-		E6B5BFF12E9A468600233959 /* jdbridge_demo.html in Resources */ = {isa = PBXBuildFile; fileRef = E6B5BFF02E9A468600233959 /* jdbridge_demo.html */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,7 +45,6 @@
 		E6B5BFCF2E9A1CCB00233959 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		E6B5BFD12E9A1CCB00233959 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		E6B5BFD32E9A1CCB00233959 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
-		E6B5BFF02E9A468600233959 /* jdbridge_demo.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = jdbridge_demo.html; sourceTree = "<group>"; };
 		E6B5C0532E9A4E4C00233959 /* chery_ios-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "chery_ios-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -118,8 +116,6 @@
 		E6B5BFD42E9A1CCB00233959 /* chery_ios */ = {
 			isa = PBXGroup;
 			children = (
-				E6B5BFEB2E9A388A00233959 /* WebView */,
-				E6B5BFDC2E9A1CEA00233959 /* Common */,
 				E6B5BFCB2E9A1CCB00233959 /* AppDelegate.swift */,
 				E6B5BFCC2E9A1CCB00233959 /* Assets.xcassets */,
 				E6B5BFCE2E9A1CCB00233959 /* Info.plist */,
@@ -129,21 +125,6 @@
 				E6B5C0532E9A4E4C00233959 /* chery_ios-Bridging-Header.h */,
 			);
 			path = chery_ios;
-			sourceTree = "<group>";
-		};
-		E6B5BFDC2E9A1CEA00233959 /* Common */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Common;
-			sourceTree = "<group>";
-		};
-		E6B5BFEB2E9A388A00233959 /* WebView */ = {
-			isa = PBXGroup;
-			children = (
-				E6B5BFF02E9A468600233959 /* jdbridge_demo.html */,
-			);
-			path = WebView;
 			sourceTree = "<group>";
 		};
 		F325649779B6D3DD9FD44EAA /* Pods */ = {
@@ -277,7 +258,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				E6B5BFD52E9A1CCB00233959 /* Assets.xcassets in Resources */,
-				E6B5BFF12E9A468600233959 /* jdbridge_demo.html in Resources */,
 				E6B5BFD72E9A1CCB00233959 /* LaunchScreen.storyboard in Resources */,
 				E6B5BFD82E9A1CCB00233959 /* Main.storyboard in Resources */,
 			);

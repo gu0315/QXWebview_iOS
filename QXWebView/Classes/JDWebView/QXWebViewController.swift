@@ -11,7 +11,7 @@ import Foundation
 import CoreTelephony
 import QuickLook
 
-// 屏幕常量（替代原 Const，若项目已有可复用）
+
 private struct ScreenConst {
     static let screenWidth = UIScreen.main.bounds.width
     static let screenHeight = UIScreen.main.bounds.height
@@ -25,6 +25,8 @@ public class QXWebViewController: UIViewController {
     var webView: JDWebViewContainer!
     /// 加载的URL
     var urlString: String?
+    
+    @objc public weak var hostDelegate: QXWebViewHostDelegate?
     
     private var previewFileURL: URL!
 
@@ -69,8 +71,10 @@ public class QXWebViewController: UIViewController {
         }
         let basePlugin = QXBasePlugin()
         let blePlugin = QXBlePlugin()
+        let hostBridgePlugin = QXHostBridgePlugin()
         webView.registerPlugin(withName: "QXBasePlugin", plugin: basePlugin)
         webView.registerPlugin(withName: "QXBlePlugin", plugin: blePlugin)
+        webView.registerPlugin(withName: "QXHostBridgePlugin", plugin: hostBridgePlugin)
     }
     
     public override func viewWillAppear(_ animated: Bool) {

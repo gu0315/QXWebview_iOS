@@ -250,6 +250,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
         callback?.onSuccess(QXBleResult.success(
             data: ["services": formattedServices],
             message: "发现服务成功，共\(services.count)个服务"
+            
         ))
         
         // 清理回调
