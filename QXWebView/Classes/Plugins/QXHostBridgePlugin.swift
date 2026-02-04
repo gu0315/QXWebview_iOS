@@ -27,7 +27,6 @@ public class QXHostBridgePlugin: JDBridgeBasePlugin {
             callbackError(message: "参数错误")
             return true
         }
-        
         if action == "openPage" {
             openPage(params)
         } else {

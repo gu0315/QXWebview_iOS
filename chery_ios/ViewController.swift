@@ -114,10 +114,12 @@ extension ViewController: QXWebViewHostDelegate {
         }
     }
     
-    // 可选
-    func webViewRequestCustomMethod(methodName: String,
-                                                   params: [String: Any]?,
-                                    completion: @escaping (Any?) -> Void) {
-        
+    func webViewRequestCustomMethod(methodName: String, params: [String : Any]?, completion: @escaping (Any?) -> Void) {
+        switch methodName {
+        case "getToken":
+            completion(["token": "xxx"])
+        default:
+            completion(["success": false, "message": "未知的方法: \(methodName)"])
+        }
     }
 }

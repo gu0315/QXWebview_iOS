@@ -47,7 +47,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     ///   - key: 回调键（用于标识不同的操作）
     public func registerCallback(_ callback: JDBridgeCallBack?, forKey key: String) {
         callbacks[key] = callback
-        print("📝 注册回调：\(key)")
+        // print("📝 注册回调：\(key)")
         
         // 如果是特征值更新回调，单独存储（用于持续接收通知）
         if key.hasPrefix(QXBleCallbackType.notifyCharacteristic.prefix) {
@@ -59,7 +59,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     /// - Parameter key: 回调键
     public func removeCallback(forKey key: String) {
         callbacks.removeValue(forKey: key)
-        print("🗑️ 移除回调：\(key)")
+        // print("🗑️ 移除回调：\(key)")
         
         // 如果是特征值更新回调，清空引用
         if key.hasPrefix(QXBleCallbackType.notifyCharacteristic.prefix) {
@@ -134,16 +134,13 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
         // 4. 缓存写入的数据（用于回调时返回）
         let dataCacheKey = "\(deviceId)_\(characteristicId)"
         lastWrittenDataCache[dataCacheKey] = value
-        print("💾 缓存写入数据：\(dataCacheKey) -> \(value.hexString)")
+        // print("💾 缓存写入数据：\(dataCacheKey) -> \(value.hexString)")
         
         // 5. 生成回调key并注册
         let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.writeCharacteristic.prefix, deviceId: deviceId)
         registerCallback(callback, forKey: callbackKey)
         
-        // 6. 选择写入类型（优先无响应写入）
-        let writeType: CBCharacteristicWriteType = char.properties.contains(.writeWithoutResponse) ? .withoutResponse : .withResponse
-        
-        print("📤 写入数据到特征值：\(characteristicId), 类型：\(writeType == .withoutResponse ? "无响应" : "有响应")")
+        let writeType: CBCharacteristicWriteType =  .withResponse
         
         // 7. 执行写入操作
         peripheral.writeValue(value, for: char, type: writeType)
@@ -250,7 +247,6 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
         callback?.onSuccess(QXBleResult.success(
             data: ["services": formattedServices],
             message: "发现服务成功，共\(services.count)个服务"
-            
         ))
         
         // 清理回调
