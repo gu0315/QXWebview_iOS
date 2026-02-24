@@ -26,27 +26,13 @@ Pod::Spec.new do |s|
     LICENSE
   }
   s.author             = { "顾钱想" => "228383741@qq.com" }
-  s.source           = { :git => 'https://github.com/gu0315/QXWebview.git', :tag => s.version.to_s }
+  s.source           = { :git => 'https://github.com/gu0315/QXWebview_iOS.git', :tag => s.version.to_s }
   # s.social_media_url = 'https://twitter.com/<TWITTER_USERNAME>'
   s.ios.deployment_target = '13.0'
 
-  s.source_files = 'Classes/**/*.{h,m,mm,swift,js}'
-  
-  # 可选：如果需要排除某些文件/文件夹，可补充
-  # s.exclude_files = 'QXWebView/Classes/JDBridge/UnusedFile.swift'
-  
-  # s.resource_bundles = {
-  #  'QXWebView' => ['QXWebView/Resources/*']
-  # }
-
-  s.public_header_files = [
-    'Classes/QXWebView.h',
-    'Classes/JDBridge/**/*.h',    
-    'Classes/JDWebView/**/*.h',  
-    'Classes/Plugins/**/*.h'
-  ]
-
   s.source_files = 'Classes/**/*.{swift,h,m}'
+  
+  s.public_header_files = 'Classes/**/*.h'
 
   s.frameworks = 'UIKit', 'CoreLocation', 'Foundation'
   # s.libraries = 'z', 'c++'
