@@ -30,9 +30,9 @@ Pod::Spec.new do |s|
   # s.social_media_url = 'https://twitter.com/<TWITTER_USERNAME>'
   s.ios.deployment_target = '13.0'
 
-  s.source_files = 'Classes/**/*.{swift,h,m}'
+  s.source_files = 'QXWebView/Classes/**/*.{swift,h,m}'
   
-  s.public_header_files = 'Classes/**/*.h'
+  s.public_header_files = 'QXWebView/Classes/**/*.h'
 
   s.frameworks = 'UIKit', 'CoreLocation', 'Foundation'
   # s.libraries = 'z', 'c++'
