@@ -200,12 +200,22 @@ class QXScannerViewController: UIViewController {
     }
     
     private func checkPhotoPermission(completion: @escaping (Bool) -> Void) {
-        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        switch status {
-        case .authorized, .limited: completion(true)
-        case .notDetermined: PHPhotoLibrary.requestAuthorization(for: .readWrite) { completion($0 == .authorized || $0 == .limited) }
-        case .denied, .restricted: showPhotoPermissionDeniedAlert(); completion(false)
-        @unknown default: completion(false)
+        if #available(iOS 14, *) {
+            let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            switch status {
+            case .authorized, .limited: completion(true)
+            case .notDetermined: PHPhotoLibrary.requestAuthorization(for: .readWrite) { completion($0 == .authorized || $0 == .limited) }
+            case .denied, .restricted: showPhotoPermissionDeniedAlert(); completion(false)
+            @unknown default: completion(false)
+            }
+        } else {
+            let status = PHPhotoLibrary.authorizationStatus()
+            switch status {
+            case .authorized: completion(true)
+            case .notDetermined: PHPhotoLibrary.requestAuthorization { completion($0 == .authorized) }
+            case .denied, .restricted: showPhotoPermissionDeniedAlert(); completion(false)
+            @unknown default: completion(false)
+            }
         }
     }
     

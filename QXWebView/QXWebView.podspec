@@ -39,7 +39,15 @@ Pod::Spec.new do |s|
   #  'QXWebView' => ['QXWebView/Resources/*']
   # }
 
-  s.public_header_files = 'Classes/QXWebView.h', 'Classes/JDBridge/*.h', 'Classes/JDWebView/*.h'
+  s.public_header_files = [
+    'Classes/QXWebView.h',
+    'Classes/JDBridge/**/*.h',    
+    'Classes/JDWebView/**/*.h',  
+    'Classes/Plugins/**/*.h'
+  ]
+
+  s.source_files = 'Classes/**/*.{swift,h,m}'
+
   s.frameworks = 'UIKit', 'CoreLocation', 'Foundation'
   # s.libraries = 'z', 'c++'
 
