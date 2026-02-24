@@ -8,7 +8,7 @@
 
 Pod::Spec.new do |s|
   s.name             = 'QXWebView'
-  s.version          = '0.1.1'
+  s.version          = '0.1.2'
   s.summary = 'A lightweight WebView container with JS-Native bridge support.'
   s.homepage         = 'https://github.com/gu0315/QXWebview'
   s.license      = { :type => 'Apache License, Version 2.0', :text => <<-LICENSE
