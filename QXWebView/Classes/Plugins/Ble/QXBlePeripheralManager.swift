@@ -212,23 +212,32 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     ///   - error: 发现服务的错误信息（如果有）
     public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         let deviceId = peripheral.identifier.uuidString
-        let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.getBLEDeviceServices.prefix, deviceId: deviceId)
+        let servicesCallbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.getBLEDeviceServices.prefix, deviceId: deviceId)
+        let discoverCharsCallbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.discoverCharacteristics.prefix, deviceId: deviceId)
         
         // 获取回调对象
-        guard let callback = callbacks[callbackKey] else { return }
+        let servicesCallback = callbacks[servicesCallbackKey] ?? nil
+        let discoverCharsCallback = callbacks[discoverCharsCallbackKey] ?? nil
+        guard servicesCallback != nil || discoverCharsCallback != nil else { return }
         
         // 错误处理
         if let error = error {
             let errorMsg = "发现服务失败：\(error.localizedDescription)"
-            callback?.onFail(QXBleResult.failure(errorCode: .unknownError, customMessage: errorMsg))
-            removeCallback(forKey: callbackKey)
+            let result = QXBleResult.failure(errorCode: .unknownError, customMessage: errorMsg)
+            servicesCallback?.onFail(result)
+            discoverCharsCallback?.onFail(result)
+            removeCallback(forKey: servicesCallbackKey)
+            removeCallback(forKey: discoverCharsCallbackKey)
             return
         }
         
         // 空服务校验
         guard let services = peripheral.services, !services.isEmpty else {
-            callback?.onFail(QXBleResult.failure(errorCode: .unknownError, customMessage: "未发现任何服务"))
-            removeCallback(forKey: callbackKey)
+            let result = QXBleResult.failure(errorCode: .unknownError, customMessage: "未发现任何服务")
+            servicesCallback?.onFail(result)
+            discoverCharsCallback?.onFail(result)
+            removeCallback(forKey: servicesCallbackKey)
+            removeCallback(forKey: discoverCharsCallbackKey)
             return
         }
         
@@ -240,17 +249,16 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
             peripheral.discoverCharacteristics(nil, for: service)
         }
         
-        // 格式化服务数据并返回
-        let formattedServices = QXBleUtils.formatServices(services)
-        
-        print("服务列表：\(formattedServices)")
-        callback?.onSuccess(QXBleResult.success(
-            data: ["services": formattedServices],
-            message: "发现服务成功，共\(services.count)个服务"
-        ))
-        
-        // 清理回调
-        removeCallback(forKey: callbackKey)
+        // 仅服务查询场景返回服务数据；特征查询场景在 didDiscoverCharacteristicsFor 中回调
+        if let callback = servicesCallback {
+            let formattedServices = QXBleUtils.formatServices(services)
+            print("服务列表：\(formattedServices)")
+            callback.onSuccess(QXBleResult.success(
+                data: ["services": formattedServices],
+                message: "发现服务成功，共\(services.count)个服务"
+            ))
+            removeCallback(forKey: servicesCallbackKey)
+        }
     }
     
     /// 发现特征回调
@@ -423,10 +431,8 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
             callback?.onSuccess(result)
         }
         
-        // 清理回调（保留特征值更新回调）
-        if !callbackKey.hasPrefix(QXBleCallbackType.notifyCharacteristic.prefix) {
-            removeCallback(forKey: callbackKey)
-        }
+        // 通知状态回调是一次性操作，回调后释放
+        removeCallback(forKey: callbackKey)
     }
     
     // MARK: - 缓存管理
@@ -454,4 +460,3 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
         print("✅ 外设管理器缓存清理完成")
     }
 }
-

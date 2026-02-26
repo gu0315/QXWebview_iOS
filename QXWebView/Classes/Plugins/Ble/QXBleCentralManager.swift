@@ -65,6 +65,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     private var reconnectionAttempts: [String: Int] = [:]             // key: deviceId, value: 当前重连次数
     private var reconnectionTimers: [String: DispatchWorkItem] = [:]  // key: deviceId, value: 重连定时器
     
+    /// 扫描超时任务
+    private var scanTimeoutWorkItem: DispatchWorkItem?
+    
     // MARK: - 初始化
     /// 初始化蓝牙中心管理器
     /// - Parameter permissionCallback: 权限请求结果回调
@@ -122,17 +125,24 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - timeout: 扫描超时时间（默认10秒）
     ///   - callbackKey: 本次扫描的回调标识
     ///   - callback: 扫描操作结果回调
-    public func startScan(services: [CBUUID]?, timeout: TimeInterval = 10.0, callbackKey: String, callback: JDBridgeCallBack?) {
+    @discardableResult
+    public func startScan(services: [CBUUID]?, timeout: TimeInterval = 10.0, callbackKey: String, callback: JDBridgeCallBack?) -> Bool {
+        // 0. 初始化状态检查
+        guard let centralManager = centralManager else {
+            callback?.onFail(QXBleResult.failure(errorCode: .notInit))
+            return false
+        }
+        
         // 1. 权限前置检查
         guard QXBleUtils.isBluetoothPermissionAuthorized() else {
             callback?.onFail(QXBleResult.failure(errorCode: .permissionDenied))
-            return
+            return false
         }
         
         // 2. 蓝牙硬件状态检查
         guard state == .poweredOn else {
             callback?.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen))
-            return
+            return false
         }
         
         // 3. 注册扫描回调
@@ -142,6 +152,12 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         discoveredPeripherals.removeAll()
         deviceRSSICache.removeAll()
         
+        // 若已有扫描任务，先停止旧扫描并清理旧超时任务
+        if centralManager.isScanning {
+            centralManager.stopScan()
+        }
+        cancelScanTimeout()
+        
         // 5. 配置扫描选项：不允许重复发现同一设备
         let scanOptions: [String: Any] = [
             CBCentralManagerScanOptionAllowDuplicatesKey: false
@@ -149,15 +165,27 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         
         // 6. 开始扫描
         centralManager.scanForPeripherals(withServices: services, options: scanOptions)
+        
+        // 7. 安排扫描超时自动停止
+        scheduleScanTimeout(timeout: timeout, callbackKey: callbackKey)
         print("开始扫描蓝牙设备")
+        return true
     }
     
     /// 停止扫描蓝牙设备
     /// - Parameter callbackKey: 扫描时的回调标识
     public func stopScan(callbackKey: String) {
+        cancelScanTimeout()
+        
+        guard let centralManager = centralManager else {
+            callbacks.removeValue(forKey: callbackKey)
+            return
+        }
+        
         // 检查是否正在扫描
         guard centralManager.isScanning else {
             print("当前未在扫描，无需停止")
+            callbacks.removeValue(forKey: callbackKey)
             return
         }
         
@@ -178,6 +206,28 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         callbacks.removeValue(forKey: callbackKey)
     }
     
+    /// 安排扫描超时任务
+    /// - Parameters:
+    ///   - timeout: 超时时间（秒）
+    ///   - callbackKey: 扫描回调Key
+    private func scheduleScanTimeout(timeout: TimeInterval, callbackKey: String) {
+        guard timeout > 0 else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            guard let centralManager = self.centralManager, centralManager.isScanning else { return }
+            print("⏱️ 扫描超时，自动停止扫描")
+            self.stopScan(callbackKey: callbackKey)
+        }
+        scanTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: workItem)
+    }
+    
+    /// 取消扫描超时任务
+    private func cancelScanTimeout() {
+        scanTimeoutWorkItem?.cancel()
+        scanTimeoutWorkItem = nil
+    }
+    
     // MARK: - 连接相关
     /// 连接蓝牙设备（单设备模式：自动断开已有连接）
     /// - Parameters:
@@ -185,6 +235,11 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - callbackKey: 本次连接的回调标识
     ///   - callback: 连接结果回调
     public func connectPeripheral(deviceId: String, callbackKey: String, callback: JDBridgeCallBack) {
+        guard let centralManager = centralManager else {
+            callback.onFail(QXBleResult.failure(errorCode: .notInit))
+            return
+        }
+        
         // 权限检查
         guard QXBleUtils.isBluetoothPermissionAuthorized() else {
             callback.onFail(QXBleResult.failure(errorCode: .permissionDenied))
@@ -270,6 +325,11 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     ///   - callbackKey: 本次断开操作的回调标识
     ///   - callback: 断开结果回调
     public func disconnectPeripheral(deviceId: String, callbackKey: String, callback: JDBridgeCallBack) {
+        guard let centralManager = centralManager else {
+            callback.onFail(QXBleResult.failure(errorCode: .notInit))
+            return
+        }
+        
         // 注册断开回调
         callbacks[callbackKey] = callback
         
@@ -414,8 +474,10 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     // MARK: - 蓝牙适配器管理
     /// 关闭蓝牙适配器，清理所有资源
     public func closeBluetoothAdapter() {
+        cancelScanTimeout()
+        
         // 停止扫描
-        if centralManager.isScanning {
+        if let centralManager = centralManager, centralManager.isScanning {
             centralManager.stopScan()
         }
         print("✅ 已取消连接超时任务")
@@ -424,8 +486,8 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         isIntentionalDisconnect = true
         
         // 断开当前连接的设备
-        if let peripheral = currentConnectedPeripheral, peripheral.state == .connected {
-            centralManager.cancelPeripheralConnection(peripheral)
+        if let manager = centralManager, let peripheral = currentConnectedPeripheral, peripheral.state == .connected {
+            manager.cancelPeripheralConnection(peripheral)
         }
         // 清理所有连接状态
         currentConnectedPeripheral = nil
@@ -601,14 +663,21 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     
     /// 通知所有缓存回调蓝牙状态变化（内部方法）
     private func notifyAllCallbacksForBluetoothStateChange() {
-        callbacks.forEach { (key, callback) in
-            if state == .poweredOn {
-                callback?.onSuccess(QXBleResult.success(message: "蓝牙已开启"))
-            } else {
-                let errorMsg = "蓝牙状态异常：\(state.description)"
-                callback?.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen, customMessage: errorMsg))
-            }
+        guard state != .poweredOn else { return }
+        
+        let scanCallbackKeys = callbacks.keys.filter {
+            QXBleUtils.getCallbackTypePrefix(from: $0) == QXBLEventType.onBluetoothDeviceFound.prefix
         }
+        
+        let errorMsg = "蓝牙状态异常：\(state.description)"
+        for key in scanCallbackKeys {
+            let callback = callbacks[key] ?? nil
+            callback?.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen, customMessage: errorMsg))
+            callbacks.removeValue(forKey: key)
+        }
+        
+        cancelScanTimeout()
+        centralManager?.stopScan()
     }
     
     /// 发现蓝牙设备回调

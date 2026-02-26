@@ -225,15 +225,29 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     ///             - timeout: 扫描超时时间（默认10秒）
     ///   - callback: 扫描操作结果回调
     private func startBluetoothDevicesDiscovery(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 权限前置检查：已拒绝
+        let central = QXBleCentralManager.shared
+        
+        // 未初始化蓝牙适配器
+        guard central.centralManager != nil else {
+            callback.onFail(QXBleResult.failure(errorCode: .notInit))
+            return
+        }
+        
+        // 权限前置检查：未确定
+        if QXBleUtils.isBluetoothPermissionNotDetermined() {
+            callback.onFail(QXBleResult.failure(errorCode: .permissionNotDetermined))
+            return
+        }
+        
+        // 权限前置检查：已拒绝/受限
         guard QXBleUtils.isBluetoothPermissionAuthorized() else {
             callback.onFail(QXBleResult.failure(errorCode: .permissionDenied))
             return
         }
         
-        // 权限前置检查：未确定
-        if (QXBleUtils.isBluetoothPermissionNotDetermined()) {
-            callback.onFail(QXBleResult.failure(errorCode: .permissionNotDetermined))
+        // 蓝牙硬件状态检查
+        guard central.state == .poweredOn else {
+            callback.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen))
             return
         }
         
@@ -250,15 +264,17 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         let timeout = params["timeout"] as? TimeInterval ?? 10.0
         
         // 调用中心管理器开始扫描
-        QXBleCentralManager.shared.startScan(
+        let started = central.startScan(
             services: serviceUUIDs,
             timeout: timeout,
             callbackKey: callbackKey,
             callback: callback
         )
         
-        // 立即返回扫描开始的成功提示
-        callback.onSuccess(["errMsg": "startBluetoothDevicesDiscovery:ok"])
+        // 扫描启动成功后返回成功提示
+        if started {
+            callback.onSuccess(["errMsg": "startBluetoothDevicesDiscovery:ok"])
+        }
     }
     
     /// 停止扫描蓝牙设备
@@ -294,15 +310,19 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         }
         
         let centralManager = QXBleCentralManager.shared
+        guard let manager = centralManager.centralManager else {
+            callback.onFail(QXBleResult.failure(errorCode: .notInit))
+            return
+        }
         
         // 2. 取消所有正在进行的重连任务（防止旧设备重连干扰新连接）
         centralManager.cancelAllReconnections()
         
         // 3. 连接前先停止扫描（避免扫描和连接同时进行导致资源竞争）
-        if centralManager.centralManager.isScanning {
+        if manager.isScanning {
             print("🛑 检测到正在扫描，先停止扫描再连接设备")
             // 停止扫描
-            centralManager.centralManager.stopScan()
+            manager.stopScan()
             // 清理扫描相关的回调（避免内存泄漏）
             let scanCallbackKey = QXBleUtils.generateCallbackKey(prefix: QXBLEventType.onBluetoothDeviceFound.rawValue)
             centralManager.callbacks.removeValue(forKey: scanCallbackKey)
