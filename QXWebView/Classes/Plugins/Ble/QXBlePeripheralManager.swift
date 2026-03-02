@@ -47,7 +47,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     ///   - key: 回调键（用于标识不同的操作）
     public func registerCallback(_ callback: JDBridgeCallBack?, forKey key: String) {
         callbacks[key] = callback
-        // print("📝 注册回调：\(key)")
+        print("📝 注册回调：\(key)")
         
         // 如果是特征值更新回调，单独存储（用于持续接收通知）
         if key.hasPrefix(QXBleCallbackType.notifyCharacteristic.prefix) {
@@ -59,8 +59,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     /// - Parameter key: 回调键
     public func removeCallback(forKey key: String) {
         callbacks.removeValue(forKey: key)
-        // print("🗑️ 移除回调：\(key)")
-        
+        print("🗑️ 移除回调：\(key)")
         // 如果是特征值更新回调，清空引用
         if key.hasPrefix(QXBleCallbackType.notifyCharacteristic.prefix) {
             characteristicValueUpdateCallback = nil
@@ -456,7 +455,5 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
         callbacks.removeAll()
         characteristicValueUpdateCallback = nil
         print("🧹 已清理所有回调")
-        
-        print("✅ 外设管理器缓存清理完成")
     }
 }

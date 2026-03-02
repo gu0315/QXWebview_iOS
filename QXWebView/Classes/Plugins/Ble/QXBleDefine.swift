@@ -236,8 +236,8 @@ public class QXBleUtils {
             [
                 "deviceId": peripheral.identifier.uuidString,  // 设备唯一标识
                 "name": peripheral.name,                       // 设备名称
-                "rssi": peripheral.rssi,                       // 信号强度
-                "state": peripheral.state.rawValue            // 连接状态
+                "rssi": peripheral.readRSSI(),                 // 信号强度
+                "state": peripheral.state.rawValue             // 连接状态
             ]
         }
     }
