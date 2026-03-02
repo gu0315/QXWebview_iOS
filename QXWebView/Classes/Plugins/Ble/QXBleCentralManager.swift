@@ -196,7 +196,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         // 触发扫描停止回调（如果存在）
         if let callback = callbacks[callbackKey] {
             let result = QXBleResult.success(
-                data: ["devices": QXBleUtils.formatPeripherals(discoveredPeripherals)],
+                data: ["devices": QXBleUtils.formatPeripherals(discoveredPeripherals, rssiCache: deviceRSSICache)],
                 message: "已停止扫描，共发现\(discoveredPeripherals.count)个设备"
             )
             callback?.onSuccess(result)

@@ -80,8 +80,9 @@
 		3D0BBFEC1921CE71BC240DC18D8BE540 /* SDImageTransformer.m in Sources */ = {isa = PBXBuildFile; fileRef = C8311186086CDECAFFF04F72AEAA112C /* SDImageTransformer.m */; };
 		3D3B646B4988314275B40E97BEB16C7F /* ConstraintLayoutGuideDSL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 534D5FA60DB3891FB0CE0A08733D50A5 /* ConstraintLayoutGuideDSL.swift */; };
 		3DDCB00FB7E4D0E652D448D7F38C2033 /* QXWebView-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = 1D770249FAE9F79F1E4153015BA71809 /* QXWebView-dummy.m */; };
-		3DE94B1B033D4CCAD59108BCF29331F8 /* QXBleDefine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47C1C66CC584611F9031C28192052A09 /* QXBleDefine.swift */; };
-		3EDAFC77C2A23F3C96DE278B461D7470 /* TheRouter+Service.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C486C1F3D9877AEE042547D19855A3 /* TheRouter+Service.swift */; };
+			3DE94B1B033D4CCAD59108BCF29331F8 /* QXBleDefine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47C1C66CC584611F9031C28192052A09 /* QXBleDefine.swift */; };
+			A1B2C3D4E5F60718293A4B5C6D7E8F90 /* QXBleUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5061728394A5B6C7D8E9F01 /* QXBleUtils.swift */; };
+			3EDAFC77C2A23F3C96DE278B461D7470 /* TheRouter+Service.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C486C1F3D9877AEE042547D19855A3 /* TheRouter+Service.swift */; };
 		3FA02AADA8C5FA12494435D9C03F474F /* TheRouerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 472059B59C70FE4FC6E91846CA33C1BD /* TheRouerBridge.swift */; };
 		40110601FA388D10FAE6DAEF65A982B6 /* QXHostBridgePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 488C38944794AF47978F47596AFF203B /* QXHostBridgePlugin.swift */; };
 		416DA8B2997381F954DBA6E6A53DA4A2 /* NSData+ImageContentType.m in Sources */ = {isa = PBXBuildFile; fileRef = F6DC18E7B60FC1DC1986F327AE25DF12 /* NSData+ImageContentType.m */; };
@@ -446,8 +447,9 @@
 		4687E4E42B746E222D03347931BDEF18 /* ConstraintLayoutSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ConstraintLayoutSupport.swift; path = Sources/ConstraintLayoutSupport.swift; sourceTree = "<group>"; };
 		46C61BF824F1BA9A229B6ECDE6379154 /* UIView+WebCacheOperation.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "UIView+WebCacheOperation.h"; path = "SDWebImage/Core/UIView+WebCacheOperation.h"; sourceTree = "<group>"; };
 		472059B59C70FE4FC6E91846CA33C1BD /* TheRouerBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TheRouerBridge.swift; path = TheRouter/Classes/TheRouerBridge.swift; sourceTree = "<group>"; };
-		47C1C66CC584611F9031C28192052A09 /* QXBleDefine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QXBleDefine.swift; sourceTree = "<group>"; };
-		47C7D32BA773666F89125A9024A77B1C /* QXWebView-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "QXWebView-Info.plist"; sourceTree = "<group>"; };
+			47C1C66CC584611F9031C28192052A09 /* QXBleDefine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QXBleDefine.swift; sourceTree = "<group>"; };
+			B1C2D3E4F5061728394A5B6C7D8E9F01 /* QXBleUtils.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QXBleUtils.swift; sourceTree = "<group>"; };
+			47C7D32BA773666F89125A9024A77B1C /* QXWebView-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "QXWebView-Info.plist"; sourceTree = "<group>"; };
 		4802B712D85D4585DD59847463570E74 /* TheRouter-prefix.pch */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "TheRouter-prefix.pch"; sourceTree = "<group>"; };
 		488C38944794AF47978F47596AFF203B /* QXHostBridgePlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QXHostBridgePlugin.swift; sourceTree = "<group>"; };
 		4A8CDEB58C23EBDB6FAD2A18BAE8D11D /* TheRouter */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = TheRouter; path = TheRouter.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1305,10 +1307,11 @@
 		F3A1915CEC91288D83018FC2E13B565C /* Ble */ = {
 			isa = PBXGroup;
 			children = (
-				F7A337E0955165C0A9378D997E0354DF /* QXBleCentralManager.swift */,
-				47C1C66CC584611F9031C28192052A09 /* QXBleDefine.swift */,
-				8C7E0ACB0D0A12F84F8A43CFE5B4DC26 /* QXBlePeripheralManager.swift */,
-			);
+					F7A337E0955165C0A9378D997E0354DF /* QXBleCentralManager.swift */,
+					47C1C66CC584611F9031C28192052A09 /* QXBleDefine.swift */,
+					B1C2D3E4F5061728394A5B6C7D8E9F01 /* QXBleUtils.swift */,
+					8C7E0ACB0D0A12F84F8A43CFE5B4DC26 /* QXBlePeripheralManager.swift */,
+				);
 			name = Ble;
 			path = Ble;
 			sourceTree = "<group>";
@@ -1855,10 +1858,11 @@
 				C249948B6F5804BEBDB5CAA9B575C30A /* JDWebViewContainer.m in Sources */,
 				933B99CBDD15A83FF04B6882194FB6CB /* OpenMapAppUtils.swift in Sources */,
 				977A0BEC0C34AAD4DFE6E5777CF7D508 /* QXBasePlugin.swift in Sources */,
-				65E98059B3E7C9DC8C6BD1F8CF411840 /* QXBleCentralManager.swift in Sources */,
-				3DE94B1B033D4CCAD59108BCF29331F8 /* QXBleDefine.swift in Sources */,
-				015FCF3A6FC299B476189A2062C8037F /* QXBlePeripheralManager.swift in Sources */,
-				115B6E8E054C65E8CA3E896BA8B89582 /* QXBlePlugin.swift in Sources */,
+					65E98059B3E7C9DC8C6BD1F8CF411840 /* QXBleCentralManager.swift in Sources */,
+					3DE94B1B033D4CCAD59108BCF29331F8 /* QXBleDefine.swift in Sources */,
+					A1B2C3D4E5F60718293A4B5C6D7E8F90 /* QXBleUtils.swift in Sources */,
+					015FCF3A6FC299B476189A2062C8037F /* QXBlePeripheralManager.swift in Sources */,
+					115B6E8E054C65E8CA3E896BA8B89582 /* QXBlePlugin.swift in Sources */,
 				40110601FA388D10FAE6DAEF65A982B6 /* QXHostBridgePlugin.swift in Sources */,
 				6D949DC88A95A7ED5B1F50E8DD788852 /* QXLocationManager.swift in Sources */,
 				13EE52280067EBA4366A9214F2786176 /* QXScannerViewController.swift in Sources */,
