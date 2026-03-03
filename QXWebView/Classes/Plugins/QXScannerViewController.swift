@@ -8,8 +8,8 @@ class QXScannerViewController: UIViewController {
     
     // MARK: - 常量定义（避免魔法值）
     private enum Constants {
-        static let scanRegionRatio: CGFloat = 0.7 // 扫描框占屏幕宽度比例
-        static let scanLineHeight: CGFloat = 2.0  // 扫描线高度
+        static let scanRegionRatio: CGFloat = 0.7     // 扫描框占屏幕宽度比例
+        static let scanLineHeight: CGFloat = 2.0      // 扫描线高度
         static let scanLineSpeed: TimeInterval = 0.01 // 扫描线移动速度
         static let scanTipFontSize: CGFloat = 16.0
         static let backButtonSize: CGFloat = 40.0
@@ -214,6 +214,7 @@ class QXScannerViewController: UIViewController {
             case .authorized: completion(true)
             case .notDetermined: PHPhotoLibrary.requestAuthorization { completion($0 == .authorized) }
             case .denied, .restricted: showPhotoPermissionDeniedAlert(); completion(false)
+            case .limited: completion(true)  //允许访问“部分照片”
             @unknown default: completion(false)
             }
         }
