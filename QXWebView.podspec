@@ -8,7 +8,7 @@
 
 Pod::Spec.new do |s|
   s.name             = 'QXWebView'
-  s.version          = '0.1.2'
+  s.version          = '0.1.3'
   s.summary = 'A lightweight WebView container with JS-Native bridge support.'
   s.homepage         = 'https://github.com/gu0315/QXWebview'
   s.license      = { :type => 'Apache License, Version 2.0', :text => <<-LICENSE
@@ -34,7 +34,7 @@ Pod::Spec.new do |s|
   
   s.public_header_files = 'QXWebView/Classes/**/*.h'
 
-  s.frameworks = 'UIKit', 'CoreLocation', 'Foundation', 'AVFoundation', 'AudioToolbox', 'Photos', 'Vision'
+  s.frameworks = 'UIKit', 'CoreLocation', 'Foundation', 'AVFoundation', 'AudioToolbox', 'Photos'
   # s.libraries = 'z', 'c++'
 
   s.swift_versions = ['5.0']
