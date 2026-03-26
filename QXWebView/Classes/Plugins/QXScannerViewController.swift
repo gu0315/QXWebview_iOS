@@ -28,6 +28,7 @@ class QXScannerViewController: UIViewController {
     private var completion: ScanCompletion?
     
     // MARK: - 核心属性
+    private let sessionQueue = DispatchQueue(label: "QXScanner.session.queue")
     private var captureSession: AVCaptureSession?
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var scanView: UIView!
@@ -305,14 +306,14 @@ extension QXScannerViewController {
     
     private func startScanningIfAuthorized() {
         guard !isScanning, let session = captureSession else { return }
-        session.startRunning()
         isScanning = true
+        sessionQueue.async { session.startRunning() }
     }
     
     private func stopScanning() {
         guard isScanning, let session = captureSession else { return }
-        session.stopRunning()
         isScanning = false
+        sessionQueue.async { session.stopRunning() }
     }
     
     private func startScanLineAnimation() {
@@ -338,7 +339,7 @@ extension QXScannerViewController {
         AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.completion?(str)
-            self?.dismiss(animated: true)
+            self?.navigationController?.dismiss(animated: true) ?? self?.dismiss(animated: true)
         }
     }
 }
@@ -397,7 +398,7 @@ extension QXScannerViewController {
         } else {
             let status = PHPhotoLibrary.authorizationStatus()
             switch status {
-            case .authorized: completion(true)
+            case .authorized, .limited: completion(true)
             case .notDetermined: PHPhotoLibrary.requestAuthorization { completion($0 == .authorized) }
             case .denied, .restricted: showPhotoPermissionDeniedAlert(); completion(false)
             @unknown default: completion(false)
