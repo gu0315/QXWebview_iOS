@@ -34,7 +34,7 @@ Pod::Spec.new do |s|
   
   s.public_header_files = 'QXWebView/Classes/**/*.h'
 
-  s.frameworks = 'UIKit', 'CoreLocation', 'Foundation'
+  s.frameworks = 'UIKit', 'CoreLocation', 'Foundation', 'AVFoundation', 'AudioToolbox', 'Photos', 'Vision'
   # s.libraries = 'z', 'c++'
 
   s.swift_versions = ['5.0']
