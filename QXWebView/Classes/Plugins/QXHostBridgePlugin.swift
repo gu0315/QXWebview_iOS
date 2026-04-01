@@ -41,9 +41,7 @@ public class QXHostBridgePlugin: JDBridgeBasePlugin {
             callbackError(message: "缺少 url")
             return
         }
-        
         let pageParams = params["params"] as? [String: Any]
-        
         if let delegate = hostDelegate {
             delegate.webViewRequestOpenPage?(url: url, params: pageParams) { [weak self] result in
                 self?.callbackSuccess(data: result ?? ["success": true])

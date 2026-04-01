@@ -45,7 +45,7 @@ class ViewController: UIViewController {
     
     let homeChargingUrl = "http://192.168.31.137:5173/"
     
-    let publicChargingUrl = "https://fr.dongxie.top/fr/#/?latitude=31.27109971007839&longitude=118.36288282976672"
+    let publicChargingUrl = "http://192.168.31.137:3001/"
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -118,6 +118,19 @@ extension ViewController: QXWebViewHostDelegate {
         switch methodName {
         case "getToken":
             completion(["token": "xxx"])
+        case "getUserInfo":
+            let result: [String: Any] = [
+                      "phone": "xxx",
+                      "list": [
+                          ["vin": "vin1", "mac": "mac1"],
+                          ["vin": "vin2", "mac": "mac2"],
+                          ["vin": "vin3", "mac": "mac3"]
+                      ],
+                      "userId": "xxx",
+                      "isLogin": true,
+                      "userName": "xxx"
+                  ]
+                  completion(result)
         default:
             completion(["success": false, "message": "未知的方法: \(methodName)"])
         }

@@ -17,6 +17,11 @@ private struct ScreenConst {
     static let screenHeight = UIScreen.main.bounds.height
 }
 
+private enum WebCacheMode {
+    case standard
+    case noCache
+}
+
 @objc(QRWebViewController)
 public class QXWebViewController: UIViewController {
     
@@ -25,6 +30,7 @@ public class QXWebViewController: UIViewController {
     var webView: JDWebViewContainer!
     /// 加载的URL
     var urlString: String?
+    private var webCacheMode: WebCacheMode = .standard
     
     @objc public weak var hostDelegate: QXWebViewHostDelegate?
     
@@ -117,6 +123,7 @@ public class QXWebViewController: UIViewController {
     /// - Parameter url: 要加载的URL
     public init(url: String) {
         self.urlString = url
+        self.webCacheMode = Self.resolveCacheMode(for: url)
         super.init(nibName: nil, bundle: nil) 
     }
     
@@ -139,28 +146,24 @@ public class QXWebViewController: UIViewController {
     /// 设置WebView
     private func setupWebView() {
         let configuration = JDWebViewContainer.defaultConfiguration()
-        
+        applyCacheMode(to: configuration)
         // 优化WebView配置
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
         configuration.suppressesIncrementalRendering = false
-        
         webView = JDWebViewContainer(
             frame: .init(x: 0, y: 0, width: ScreenConst.screenWidth, height: ScreenConst.screenHeight),
             configuration: configuration
         )
-        
         if #available(iOS 16.4, *) {
-            webView.realWebView.isInspectable = true
+            // webView.realWebView.isInspectable = true
         }
         webView.delegate = self
         webView.backgroundColor = .systemBackground
-        
         webView.realWebView.scrollView.decelerationRate = .normal
         webView.realWebView.scrollView.bounces = true
         webView.realWebView.scrollView.showsVerticalScrollIndicator = true
         webView.realWebView.scrollView.showsHorizontalScrollIndicator = false
-        
         // 禁用AutoresizingMask，启用AutoLayout
         webView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(webView)
@@ -174,7 +177,6 @@ public class QXWebViewController: UIViewController {
         // 初始top/bottom约束（后续动态更新）
         webViewTopConstraint = webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
         webViewBottomConstraint = webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
-        
         // 激活所有约束
         NSLayoutConstraint.activate([
             webViewLeadingConstraint,
@@ -191,9 +193,6 @@ public class QXWebViewController: UIViewController {
         webView.realWebView.scrollView.showsVerticalScrollIndicator = false
         webView.realWebView.scrollView.showsHorizontalScrollIndicator = false
         webView.realWebView.scrollView.bounces = true
-        // 配置缓存策略
-        let cacheConfig = URLCache(memoryCapacity: 1024 * 1024 * 10, diskCapacity: 1024 * 1024 * 100, diskPath: "WebCache")
-        URLCache.shared = cacheConfig
     }
     
     /// 设置通知监听
@@ -261,27 +260,23 @@ public class QXWebViewController: UIViewController {
                 self.webViewTopConstraint,
                 self.webViewBottomConstraint
             ])
-            
             // 更新Top约束
             if self.isNavigationBarHidden && self.isImmersiveStatusBar {
                 self.webViewTopConstraint = self.webView.topAnchor.constraint(equalTo: self.view.topAnchor)
             } else {
                 self.webViewTopConstraint = self.webView.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor)
             }
-            
             // 更新Bottom约束
             if self.shouldHandleBottomSafeArea {
                 self.webViewBottomConstraint = self.webView.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor)
             } else {
                 self.webViewBottomConstraint = self.webView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
             }
-            
             // 激活新约束
             NSLayoutConstraint.activate([
                 self.webViewTopConstraint,
                 self.webViewBottomConstraint
             ])
-            
             // 强制刷新布局
             self.view.layoutIfNeeded()
         }
@@ -307,7 +302,6 @@ public class QXWebViewController: UIViewController {
         let dataStore = webView.realWebView.configuration.websiteDataStore
         let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
         let date = Date(timeIntervalSince1970: 0)
-        
         dataStore.removeData(ofTypes: dataTypes, modifiedSince: date) {
             print("WebView缓存清理完成")
         }
@@ -329,15 +323,15 @@ public class QXWebViewController: UIViewController {
     func loadURL(_ urlString: String) {
         // 检查URL中是否包含状态栏和导航栏的控制参数
         parseURLParameters(urlString: urlString)
+        webCacheMode = Self.resolveCacheMode(for: urlString)
         // 安全地转换URL字符串为URL
         guard let url = URL(string: urlString) else {
             print("URL格式错误：\(urlString)")
             return
         }
         // 创建请求
-        let request = URLRequest(url: url)
+        let request = makeRequest(for: url)
         webView.load(request)
-        
         print("开始加载URL: \(urlString)")
     }
 
@@ -362,8 +356,52 @@ public class QXWebViewController: UIViewController {
         // 处理状态栏样式参数
         if let statusBarStyleParam = components.queryItems?.first(where: { $0.name == "statusBarStyle" })?.value,
            statusBarStyleParam == "dark" {
-            // 扩展：可添加更多状态栏样式逻辑
+           // 扩展：可添加更多状态栏样式逻辑
         }
+    }
+
+    private func applyCacheMode(to configuration: WKWebViewConfiguration) {
+        if webCacheMode == .noCache {
+            configuration.websiteDataStore = .nonPersistent()
+        }
+    }
+
+    private func makeRequest(for url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+        if Self.resolveCacheMode(for: url.absoluteString) == .noCache {
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.setValue("no-cache, no-store, must-revalidate", forHTTPHeaderField: "Cache-Control")
+            request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+            request.setValue("0", forHTTPHeaderField: "Expires")
+        }
+        return request
+    }
+
+    private static func resolveCacheMode(for urlString: String) -> WebCacheMode {
+        guard
+            let url = URL(string: urlString),
+            let host = url.host?.lowercased()
+        else {
+            return .standard
+        }
+        if host == "localhost" || host == "127.0.0.1" || host == "::1" || host.hasSuffix(".local") {
+            return .noCache
+        }
+        let octets = host.split(separator: ".").compactMap { Int($0) }
+        guard octets.count == 4 else {
+            return .standard
+        }
+        if octets[0] == 10 || octets[0] == 127 {
+            return .noCache
+        }
+        if octets[0] == 192 && octets[1] == 168 {
+            return .noCache
+        }
+        if octets[0] == 172 && (16...31).contains(octets[1]) {
+            return .noCache
+        }
+        return .standard
     }
     
     
@@ -433,7 +471,7 @@ extension QXWebViewController: WebViewDelegate {
         }
         // 处理 target=_blank 的情况：在当前视图中打开
         if navigationAction.targetFrame == nil {
-            webView.load(URLRequest(url: url))
+            webView.load(makeRequest(for: url))
             decisionHandler(.cancel)
             return
         }
