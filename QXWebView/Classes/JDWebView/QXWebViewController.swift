@@ -31,6 +31,7 @@ public class QXWebViewController: UIViewController {
     /// 加载的URL
     var urlString: String?
     private var webCacheMode: WebCacheMode = .standard
+    private var navigationBarStyleOverride: UIBarStyle?
     
     @objc public weak var hostDelegate: QXWebViewHostDelegate?
     
@@ -156,7 +157,7 @@ public class QXWebViewController: UIViewController {
             configuration: configuration
         )
         if #available(iOS 16.4, *) {
-            // webView.realWebView.isInspectable = true
+            webView.realWebView.isInspectable = true
         }
         webView.delegate = self
         webView.backgroundColor = .systemBackground
@@ -282,10 +283,20 @@ public class QXWebViewController: UIViewController {
         }
     }
     
-    /// 更新状态栏样式（通过系统首选项）
+    /// 更新状态栏样式
     private func updateStatusBarStyle() {
-        navigationController?.navigationBar.barStyle = isImmersiveStatusBar ? .black : .default
+        let resolvedStyle = navigationBarStyleOverride ?? (isImmersiveStatusBar ? .black : .default)
+        navigationController?.navigationBar.barStyle = resolvedStyle
         setNeedsStatusBarAppearanceUpdate()
+    }
+
+    func setNavigationBarStyleOverride(_ style: UIBarStyle?) {
+        navigationBarStyleOverride = style
+        if let style {
+            isImmersiveStatusBar = (style == .black)
+        } else {
+            updateStatusBarStyle()
+        }
     }
     
     /// 清理资源

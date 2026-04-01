@@ -35,6 +35,9 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         case "openMap":
             handleOpenMap(params: params, callback: callback)
             return true
+        case "setNavigationBarStyle":
+            handleSetNavigationBarStyle(params: params, callback: callback)
+            return true
         default:
             callback.onFail(NSError(domain: "DeviceInfoPlugin", code: 1001, userInfo: [NSLocalizedDescriptionKey: "未知操作"]))
             return false
@@ -243,6 +246,72 @@ public class QXBasePlugin: JDBridgeBasePlugin {
                 lng: lng,
                 name: name
             )
+        }
+    }
+
+    private func handleSetNavigationBarStyle(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
+        guard let style = resolveNavigationBarStyle(from: params) else {
+            callback.onFail([
+                "code": -1,
+                "msg": "barStyle 参数无效，支持 default/black 或 0/1"
+            ])
+            return
+        }
+        DispatchQueue.main.async {
+            guard let webViewController = callback.findWebViewController() else {
+                callback.onFail([
+                    "code": -2,
+                    "msg": "未找到WebViewController"
+                ])
+                return
+            }
+            webViewController.setNavigationBarStyleOverride(style)
+            callback.onSuccess([
+                "code": 0,
+                "msg": "navigationBar.barStyle 设置成功",
+                "style": self.navigationBarStyleName(for: style),
+                "rawValue": style.rawValue
+            ])
+        }
+    }
+
+    private func resolveNavigationBarStyle(from params: [AnyHashable : Any]?) -> UIBarStyle? {
+        guard let params = params else { return nil }
+
+        if let styleName = (params["style"] as? String ?? params["barStyle"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() {
+            switch styleName {
+            case "default", "light":
+                return .default
+            case "black", "dark":
+                return .black
+            default:
+                break
+            }
+        }
+
+        if let rawValue = params["style"] as? NSNumber ?? params["barStyle"] as? NSNumber {
+            switch rawValue.intValue {
+            case UIBarStyle.default.rawValue:
+                return .default
+            case UIBarStyle.black.rawValue:
+                return .black
+            default:
+                break
+            }
+        }
+
+        return nil
+    }
+
+    private func navigationBarStyleName(for style: UIBarStyle) -> String {
+        switch style {
+        case .black:
+            return "black"
+        default:
+            return "default"
         }
     }
 }
