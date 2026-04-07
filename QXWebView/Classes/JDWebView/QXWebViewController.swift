@@ -72,16 +72,19 @@ public class QXWebViewController: UIViewController {
         setupUI()
         // 设置通知监听
         setupNotificationObservers()
-        // 加载URL
-        if let url = urlString {
-            loadURL(url)
-        }
         let basePlugin = QXBasePlugin()
         let blePlugin = QXBlePlugin()
         let hostBridgePlugin = QXHostBridgePlugin()
         webView.registerPlugin(withName: "QXBasePlugin", plugin: basePlugin)
         webView.registerPlugin(withName: "QXBlePlugin", plugin: blePlugin)
         webView.registerPlugin(withName: "QXHostBridgePlugin", plugin: hostBridgePlugin)
+        // 每次进入 WebView 前先清缓存，避免加载旧页面
+        if let url = urlString {
+            self.loadURL(url)
+            /*clearWebViewCache { [weak self] in
+                self?.loadURL(url)
+            }*/
+        }
     }
     
     public override func viewWillAppear(_ animated: Bool) {
@@ -309,12 +312,46 @@ public class QXWebViewController: UIViewController {
     }
     
     /// 清理WebView缓存
-    private func clearWebViewCache() {
+    private func clearWebViewCache(completion: (() -> Void)? = nil) {
+        webView.stopLoading()
+        URLCache.shared.removeAllCachedResponses()
+
+        let sharedCookieStorage = HTTPCookieStorage.shared
+        sharedCookieStorage.cookies?.forEach { sharedCookieStorage.deleteCookie($0) }
+
         let dataStore = webView.realWebView.configuration.websiteDataStore
         let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
         let date = Date(timeIntervalSince1970: 0)
+        let group = DispatchGroup()
+
+        group.enter()
         dataStore.removeData(ofTypes: dataTypes, modifiedSince: date) {
+            group.leave()
+        }
+
+        group.enter()
+        let cookieStore = dataStore.httpCookieStore
+        cookieStore.getAllCookies { cookies in
+            if cookies.isEmpty {
+                group.leave()
+                return
+            }
+
+            let cookieGroup = DispatchGroup()
+            for cookie in cookies {
+                cookieGroup.enter()
+                cookieStore.delete(cookie) {
+                    cookieGroup.leave()
+                }
+            }
+            cookieGroup.notify(queue: .main) {
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
             print("WebView缓存清理完成")
+            completion?()
         }
     }
     

@@ -11,64 +11,63 @@ import Foundation
 @objc(QXHostBridgePlugin)
 public class QXHostBridgePlugin: JDBridgeBasePlugin {
     
-    private var currentCallback: JDBridgeCallBack?
-    
-    private var hostDelegate: QXWebViewHostDelegate? {
-        guard let viewController = currentCallback?.webViewController as? QXWebViewController else {
-            return nil
+    private func hostDelegate(for callback: JDBridgeCallBack) -> QXWebViewHostDelegate? {
+        if let viewController = callback.webViewController as? QXWebViewController {
+            return viewController.hostDelegate
         }
-        return viewController.hostDelegate
+        if let viewController = callback.findWebViewController() {
+            return viewController.hostDelegate
+        }
+        return nil
     }
     
     public override func excute(_ action: String, params: [AnyHashable : Any]?, callback: JDBridgeCallBack) -> Bool {
-        self.currentCallback = callback
-        
         guard let params = params as? [String: Any] else {
-            callbackError(message: "参数错误")
+            callbackError(message: "参数错误", callback: callback)
             return true
         }
         if action == "openPage" {
-            openPage(params)
+            openPage(params, callback: callback)
         } else {
-            callCustomMethod(action, params: params)
+            callCustomMethod(action, params: params, callback: callback)
         }
         
         return true
     }
     
-    private func openPage(_ params: [String: Any]) {
+    private func openPage(_ params: [String: Any], callback: JDBridgeCallBack) {
         guard let url = params["url"] as? String else {
-            callbackError(message: "缺少 url")
+            callbackError(message: "缺少 url", callback: callback)
             return
         }
         let pageParams = params["params"] as? [String: Any]
-        if let delegate = hostDelegate {
+        if let delegate = hostDelegate(for: callback) {
             delegate.webViewRequestOpenPage?(url: url, params: pageParams) { [weak self] result in
-                self?.callbackSuccess(data: result ?? ["success": true])
+                self?.callbackSuccess(data: result ?? ["success": true], callback: callback)
             }
         } else {
-            callbackError(message: "宿主 APP 未实现 delegate")
+            callbackError(message: "宿主 APP 未实现 delegate 或未设置 hostDelegate", callback: callback)
         }
     }
     
-    private func callCustomMethod(_ methodName: String, params: [String: Any]) {
-        if let delegate = hostDelegate {
+    private func callCustomMethod(_ methodName: String, params: [String: Any], callback: JDBridgeCallBack) {
+        if let delegate = hostDelegate(for: callback) {
             delegate.webViewRequestCustomMethod?(methodName: methodName, params: params) { [weak self] result in
-                self?.callbackSuccess(data: result ?? ["success": true])
+                self?.callbackSuccess(data: result ?? ["success": true], callback: callback)
             }
         } else {
-            callbackError(message: "宿主 APP 未实现 delegate")
+            callbackError(message: "宿主 APP 未实现 delegate 或未设置 hostDelegate", callback: callback)
         }
     }
     
-    private func callbackSuccess(data: Any) {
-        currentCallback?.onSuccess(data)
+    private func callbackSuccess(data: Any, callback: JDBridgeCallBack) {
+        callback.onSuccess(data)
     }
     
-    private func callbackError(message: String) {
+    private func callbackError(message: String, callback: JDBridgeCallBack) {
         let error = NSError(domain: "QXHostBridgePlugin", 
                            code: -1, 
                            userInfo: [NSLocalizedDescriptionKey: message])
-        currentCallback?.onFail(error)
+        callback.onFail(error)
     }
 }

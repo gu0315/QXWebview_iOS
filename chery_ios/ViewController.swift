@@ -43,9 +43,9 @@ class ViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
     
-    let homeChargingUrl = "http://192.168.31.137:5173/"
+    let homeChargingUrl = "https://test-fr-home-charge-web.cheryge.com/#/"
     
-    let publicChargingUrl = "http://192.168.31.137:3001/"
+    let publicChargingUrl = "http://192.168.31.137:5173/"
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -84,6 +84,7 @@ class ViewController: UIViewController {
     
     @objc private func publicChargingAction() {
         let vc = QXWebViewController(url: publicChargingUrl)
+        vc.hostDelegate = self
         navigationController?.pushViewController(vc, animated: true)
     }
 }
@@ -102,15 +103,35 @@ extension ViewController: QXWebViewHostDelegate {
             // 拉起支付功能
             // 需要宿主实现支付逻辑
             // 调用 completion 返回支付结果（成功 / 失败 / 错误信息）
-            break
+            completion([
+                "success": true,
+                "action": "pay",
+                "params": safeParams
+            ])
         case "app://login":
             // 拉起登录功能
             // 需要宿主实现登录逻辑
             // 调用 completion 返回登录结果（成功 / 失败 / 错误信息）
-            break
+            let result: [String: Any] = [
+                      "phone": "xxx",
+                      "list": [
+                          ["vin": "vin1", "mac": "mac1"],
+                          ["vin": "vin2", "mac": "mac2"],
+                          ["vin": "vin3", "mac": "mac3"]
+                      ],
+                      "userId": "1232323232xxx",
+                      "isLogin": true,
+                      "userName": "xxx"
+                  ]
+                  completion(result)
         default:
             // 未注册或未处理的能力
             print("未处理的 URL: \(url)")
+            completion([
+                "success": false,
+                "message": "未处理的 URL: \(url)",
+                "params": safeParams
+            ])
         }
     }
     
@@ -127,7 +148,7 @@ extension ViewController: QXWebViewHostDelegate {
                           ["vin": "vin3", "mac": "mac3"]
                       ],
                       "userId": "xxx",
-                      "isLogin": true,
+                      "isLogin": false,
                       "userName": "xxx"
                   ]
                   completion(result)
