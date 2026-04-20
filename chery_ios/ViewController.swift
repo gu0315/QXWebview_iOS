@@ -45,7 +45,7 @@ class ViewController: UIViewController {
     
     let homeChargingUrl = "https://test-fr-home-charge-web.cheryge.com/#/"
     
-    let publicChargingUrl = "http://192.168.31.137:5173/"
+    let publicChargingUrl = "http://192.168.31.137:3000/"
     
     // MARK: - Lifecycle
     override func viewDidLoad() {

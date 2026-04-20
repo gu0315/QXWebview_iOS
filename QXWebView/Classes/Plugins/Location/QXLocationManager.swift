@@ -337,20 +337,23 @@ extension QXLocationManager {
     private func handlePermissionDenied() {
         let cacheDict = UserDefaults.standard.dictionary(forKey: kSCCLocationPositioningCache)
         let requestPermission = paramsData?["requestPermission"] as? Bool ?? false
-        
+        // 无论有无缓存、是否要求跳转设置，都必须回调一次"无权限"结果，避免调用方一直等待
         if let cacheDict = cacheDict {
             var result = cacheDict
-            result["isEnable"] = false
             result["hasPermission"] = false
+            result["isEnable"] = false
             callbackLocationResult(result)
-        } else if requestPermission {
-            if let url = URL(string: UIApplication.openSettingsURLString), UIApplication.shared.canOpenURL(url) {
-                UIApplication.shared.open(url, options: [:])
-            }
         } else {
-            callbackLocationResult(["locationType":"failure","hasPermission":false,"isEnable":false,"msg":kPermissionDeniedMsg])
+            callbackLocationResult(["locationType":"failure",
+                                    "hasPermission":false,
+                                    "isEnable":false,
+                                    "msg":kPermissionDeniedMsg])
         }
-        locationBlock = nil
+        if requestPermission,
+           let url = URL(string: UIApplication.openSettingsURLString),
+           UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url, options: [:])
+        }
     }
     
     private func handleLocationServiceDisabled() {

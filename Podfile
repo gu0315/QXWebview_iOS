@@ -8,9 +8,8 @@ target 'chery_ios' do
   pod 'MJExtension'
   # 离线包方案
   pod 'TheRouter', '1.1.8'
-  
-  pod 'QXWebView', :path=>'./QXWebView'
-  # pod 'QXWebView', '~> 0.1.1'
+  pod 'QXWebView', :path => '.'
+  #pod 'QXWebView', '0.1.4'
 end
 
 post_install do
