@@ -27,7 +27,7 @@ public class QXBasePlugin: JDBridgeBasePlugin {
             handleGoBack(callback: callback)
             return true
         case "location":
-            handleLocation(callback: callback)
+            handleLocation(params: params, callback: callback)
             return true
         case "downloadAndOpenFile":
             handleDownloadAndOpenFile(params: params, callback: callback)
@@ -110,13 +110,36 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         callback.onSuccess(deviceInfo)
     }
     
-    private func handleLocation(callback: JDBridgeCallBack) {
+    private func handleLocation(params: [AnyHashable : Any]!, callback: JDBridgeCallBack) {
         DispatchQueue.global().async {
             if (!CLLocationManager.locationServicesEnabled()) {
                 return
             }
         }
-        QXLocationManager.manager.paramsData = ["accuracy":100, "timeout":3000, "requestPermission":true]
+        // 默认值兜底：H5 未传时使用
+        var locationParams: [String: Any] = [
+            "accuracy": 100,
+            "timeout": 3000,
+            "requestPermission": true
+        ]
+        // 透传 H5 传入的参数（支持 accuracy / timeout / wait / requestPermission）
+        if let params = params {
+            if let accuracy = (params["accuracy"] as? NSNumber)?.intValue {
+                locationParams["accuracy"] = accuracy
+            }
+            if let timeout = (params["timeout"] as? NSNumber)?.intValue {
+                locationParams["timeout"] = timeout
+            }
+            if let wait = (params["wait"] as? NSNumber)?.intValue {
+                locationParams["wait"] = wait
+            }
+            if let requestPermission = params["requestPermission"] as? Bool {
+                locationParams["requestPermission"] = requestPermission
+            } else if let requestPermission = (params["requestPermission"] as? NSNumber)?.boolValue {
+                locationParams["requestPermission"] = requestPermission
+            }
+        }
+        QXLocationManager.manager.paramsData = locationParams
         QXLocationManager.manager.setGetLocationBlock { res in
             callback.onSuccess(res)
         }
