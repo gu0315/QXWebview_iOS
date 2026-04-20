@@ -38,6 +38,12 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         case "setNavigationBarStyle":
             handleSetNavigationBarStyle(params: params, callback: callback)
             return true
+        case "openWebView":
+            handleOpenWebView(params: params, callback: callback)
+            return true
+        case "openUrl":
+            handleOpenUrl(params: params, callback: callback)
+            return true
         default:
             callback.onFail(NSError(domain: "DeviceInfoPlugin", code: 1001, userInfo: [NSLocalizedDescriptionKey: "未知操作"]))
             return false
@@ -336,6 +342,164 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         default:
             return "default"
         }
+    }
+
+    // MARK: - 打开新的 WebView 页面
+    /// H5 调用示例:
+    /// QXBasePlugin.openWebView({
+    ///   url: "https://xxx.com/page",
+    ///   query: { id: 1, from: "h5" },   // 可选 会自动拼到 url 的 query 上
+    ///   navHidden: true,                  // 可选 是否隐藏导航栏
+    ///   immersive: true,                  // 可选 是否沉浸式状态栏
+    ///   presentStyle: "push"              // 可选 push / present，默认 push
+    /// })
+    private func handleOpenWebView(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
+        guard let params = params,
+              let rawUrl = (params["url"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawUrl.isEmpty else {
+            callback.onFail(["code": -1, "msg": "url 不能为空"])
+            return
+        }
+
+        let finalUrl = Self.appendQueryParams(to: rawUrl, params: params["query"] as? [String: Any])
+        let navHidden = (params["navHidden"] as? Bool)
+            ?? (params["navHidden"] as? NSNumber)?.boolValue
+        let immersive = (params["immersive"] as? Bool)
+            ?? (params["immersive"] as? NSNumber)?.boolValue
+        let presentStyle = (params["presentStyle"] as? String)?.lowercased() ?? "push"
+
+        DispatchQueue.main.async {
+            guard let topVC = UIApplication.shared.topViewController else {
+                callback.onFail(["code": -2, "msg": "未找到顶层视图控制器"])
+                return
+            }
+            let webVC = QXWebViewController(url: finalUrl)
+            if let navHidden = navHidden { webVC.isNavigationBarHidden = navHidden }
+            if let immersive = immersive { webVC.isImmersiveStatusBar = immersive }
+
+            if presentStyle == "present" {
+                let wrapper = UINavigationController(rootViewController: webVC)
+                wrapper.modalPresentationStyle = .fullScreen
+                wrapper.navigationBar.isHidden = webVC.isNavigationBarHidden
+                topVC.present(wrapper, animated: true)
+            } else if let navController = topVC.navigationController {
+                navController.pushViewController(webVC, animated: true)
+            } else if let navController = topVC as? UINavigationController {
+                navController.pushViewController(webVC, animated: true)
+            } else {
+                // 兜底：没有导航栈时用 present
+                let wrapper = UINavigationController(rootViewController: webVC)
+                wrapper.modalPresentationStyle = .fullScreen
+                wrapper.navigationBar.isHidden = webVC.isNavigationBarHidden
+                topVC.present(wrapper, animated: true)
+            }
+            callback.onSuccess([
+                "code": 0,
+                "msg": "打开 WebView 成功",
+                "url": finalUrl
+            ])
+        }
+    }
+
+    // MARK: - 打开 URL（系统设置、定位、蓝牙、电话、邮件、第三方 App 等）
+    /// H5 调用示例:
+    /// QXBasePlugin.openUrl({ type: "settings" })                  // 打开本 App 的设置页
+    /// QXBasePlugin.openUrl({ type: "location" })                  // 尝试打开定位设置
+    /// QXBasePlugin.openUrl({ type: "notification" })              // 通知设置
+    /// QXBasePlugin.openUrl({ type: "bluetooth" })                 // 蓝牙
+    /// QXBasePlugin.openUrl({ type: "wifi" })                      // 无线局域网
+    /// QXBasePlugin.openUrl({ url: "tel:10086" })                  // 拨号
+    /// QXBasePlugin.openUrl({ url: "mailto:a@b.com" })             // 发邮件
+    /// QXBasePlugin.openUrl({ url: "https://xxx.com", query: {a:1} }) // 任意 URL + 拼参数
+    private func handleOpenUrl(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
+        let typeString = (params?["type"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        let inputUrl = (params?["url"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let queryParams = (params?["query"] as? [String: Any])
+            ?? (params?["params"] as? [String: Any])
+
+        let resolvedUrl = resolveSystemUrl(for: typeString, fallback: inputUrl)
+        guard !resolvedUrl.isEmpty else {
+            callback.onFail(["code": -1, "msg": "url 或 type 不能同时为空"])
+            return
+        }
+        let finalUrl = Self.appendQueryParams(to: resolvedUrl, params: queryParams)
+        guard let url = URL(string: finalUrl) else {
+            callback.onFail(["code": -2, "msg": "url 格式错误: \(finalUrl)"])
+            return
+        }
+        DispatchQueue.main.async {
+            guard UIApplication.shared.canOpenURL(url) else {
+                callback.onFail([
+                    "code": -3,
+                    "msg": "当前设备无法打开此 URL",
+                    "url": finalUrl
+                ])
+                return
+            }
+            UIApplication.shared.open(url, options: [:]) { success in
+                if success {
+                    callback.onSuccess([
+                        "code": 0,
+                        "msg": "打开成功",
+                        "url": finalUrl
+                    ])
+                } else {
+                    callback.onFail([
+                        "code": -4,
+                        "msg": "打开失败",
+                        "url": finalUrl
+                    ])
+                }
+            }
+        }
+    }
+
+    /// 根据 type 解析系统页面 URL（未匹配则返回 fallback）
+    private func resolveSystemUrl(for type: String, fallback: String) -> String {
+        switch type {
+        case "", "url", "custom":
+            return fallback
+        case "settings", "app-settings", "appsettings":
+            return UIApplication.openSettingsURLString
+        case "notification", "notifications", "notification-settings":
+            if #available(iOS 16.0, *) {
+                return UIApplication.openNotificationSettingsURLString
+            } else {
+                return UIApplication.openSettingsURLString
+            }
+        case "location", "location-settings":
+            // iOS 未提供官方定位设置深链，部分系统版本 App-Prefs 可生效，失败时调用方可改用 settings
+            return "App-Prefs:LOCATION_SERVICES"
+        case "bluetooth", "ble":
+            return "App-Prefs:Bluetooth"
+        case "wifi", "wlan":
+            return "App-Prefs:WIFI"
+        case "cellular", "mobile-data":
+            return "App-Prefs:MOBILE_DATA_SETTINGS_ID"
+        case "general":
+            return "App-Prefs:General"
+        case "privacy":
+            return "App-Prefs:Privacy"
+        default:
+            return fallback
+        }
+    }
+
+    /// 将字典参数拼到已有 URL 的 query 上（保留原 query，自动做百分号编码）
+    private static func appendQueryParams(to urlString: String, params: [String: Any]?) -> String {
+        guard let params = params, !params.isEmpty else { return urlString }
+        guard var components = URLComponents(string: urlString) else { return urlString }
+        var items = components.queryItems ?? []
+        for (key, value) in params {
+            items.append(URLQueryItem(name: key, value: String(describing: value)))
+        }
+        components.queryItems = items
+        return components.url?.absoluteString ?? urlString
     }
 }
 
