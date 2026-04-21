@@ -64,29 +64,29 @@ public class QXBasePlugin: JDBridgeBasePlugin {
                     if granted {
                         self.startQRScanning(callback: callback)
                     } else {
-                        callback.onFail( callback.onFail(["message": "没有相机权限","success": false]))
+                        callback.onFail(QXBridgeError.noPermission("没有相机权限", domain: self.errorDomain))
                     }
                 }
             }
-            
         case .denied, .restricted:
-            callback.onFail( callback.onFail(["message": "没有相机权限","success": false]))
+            callback.onFail(QXBridgeError.noPermission("没有相机权限", domain: errorDomain))
         @unknown default:
-            callback.onFail( callback.onFail(["message": "未知错误","success": false]))
+            callback.onFail(QXBridgeError.make(.unknown, message: "未知错误", domain: errorDomain))
         }
     }
     
     private func startQRScanning(callback: JDBridgeCallBack!) {
         guard let callback = callback else { return }
-        let scannerVC = QXScannerViewController { result in
+        let scannerVC = QXScannerViewController { [weak self] result in
+            guard let self = self else { return }
             if let qrResult = result, !qrResult.isEmpty {
                 callback.onSuccess(["data": qrResult, "success": true])
             } else {
-                callback.onFail(["message": "扫描结果为空","success": false])
+                callback.onFail(QXBridgeError.make(.cancelled, message: "扫描结果为空", domain: self.errorDomain))
             }
         }
         guard let topVC = UIApplication.shared.topViewController else {
-            callback.onFail( callback.onFail(["message": "无法获取页面","success": false]))
+            callback.onFail(QXBridgeError.notFound("无法获取页面", domain: errorDomain))
             return
         }
         
@@ -155,11 +155,11 @@ public class QXBasePlugin: JDBridgeBasePlugin {
 
     private func handleGoBack(callback: JDBridgeCallBack) {
         guard let topVC = UIApplication.shared.topViewController else {
-            callback.onFail(["code": -1, "msg": "未找到顶层视图控制器"])
+            callback.onFail(QXBridgeError.notFound("未找到顶层视图控制器", domain: errorDomain))
             return
         }
         guard let jdWebViewContainer = callback.findJDWebViewContainer(in: topVC.view) else {
-            callback.onFail(["code": -2, "msg": "未找到WebView容器"])
+            callback.onFail(QXBridgeError.notFound("未找到WebView容器", domain: errorDomain))
             return
         }
         if (jdWebViewContainer.canGoBack()) {
@@ -250,8 +250,9 @@ public class QXBasePlugin: JDBridgeBasePlugin {
     }
     
     private func handleOpenMap(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
         guard let params = params else {
-            callback?.onFail("参数不能为空")
+            callback.onFail(QXBridgeError.invalidParams("参数不能为空", domain: errorDomain))
             return
         }
         // 使用 String(describing:) 可以确保无论是数字还是字符串都能安全转为 String
@@ -260,11 +261,11 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         let name = params["name"] as? String ?? "目的地"
         // 3. 校验关键坐标是否有效
         guard !lat.isEmpty, !lng.isEmpty, lat != "<nil>", lng != "<nil>" else {
-            callback?.onFail("经纬度解析失败")
+            callback.onFail(QXBridgeError.invalidParams("经纬度解析失败", domain: errorDomain))
             return
         }
         guard let topVC = UIApplication.shared.topViewController else {
-            callback.onFail(["code": -1, "msg": "未找到顶层视图控制器"])
+            callback.onFail(QXBridgeError.notFound("未找到顶层视图控制器", domain: errorDomain))
             return
         }
         // 确保在主线程调用 UI
@@ -281,18 +282,15 @@ public class QXBasePlugin: JDBridgeBasePlugin {
     private func handleSetNavigationBarStyle(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
         guard let callback = callback else { return }
         guard let style = resolveNavigationBarStyle(from: params) else {
-            callback.onFail([
-                "code": -1,
-                "msg": "barStyle 参数无效，支持 default/black 或 0/1"
-            ])
+            callback.onFail(QXBridgeError.invalidParams(
+                "barStyle 参数无效，支持 default/black 或 0/1",
+                domain: errorDomain
+            ))
             return
         }
         DispatchQueue.main.async {
             guard let webViewController = callback.findWebViewController() else {
-                callback.onFail([
-                    "code": -2,
-                    "msg": "未找到WebViewController"
-                ])
+                callback.onFail(QXBridgeError.notFound("未找到WebViewController", domain: self.errorDomain))
                 return
             }
             webViewController.setNavigationBarStyleOverride(style)
@@ -358,7 +356,7 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         guard let params = params,
               let rawUrl = (params["url"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !rawUrl.isEmpty else {
-            callback.onFail(["code": -1, "msg": "url 不能为空"])
+            callback.onFail(QXBridgeError.invalidParams("url 不能为空", domain: errorDomain))
             return
         }
 
@@ -371,7 +369,7 @@ public class QXBasePlugin: JDBridgeBasePlugin {
 
         DispatchQueue.main.async {
             guard let topVC = UIApplication.shared.topViewController else {
-                callback.onFail(["code": -2, "msg": "未找到顶层视图控制器"])
+                callback.onFail(QXBridgeError.notFound("未找到顶层视图控制器", domain: self.errorDomain))
                 return
             }
             let webVC = QXWebViewController(url: finalUrl)
@@ -424,21 +422,22 @@ public class QXBasePlugin: JDBridgeBasePlugin {
 
         let resolvedUrl = resolveSystemUrl(for: typeString, fallback: inputUrl)
         guard !resolvedUrl.isEmpty else {
-            callback.onFail(["code": -1, "msg": "url 或 type 不能同时为空"])
+            callback.onFail(QXBridgeError.invalidParams("url 或 type 不能同时为空", domain: errorDomain))
             return
         }
         let finalUrl = Self.appendQueryParams(to: resolvedUrl, params: queryParams)
         guard let url = URL(string: finalUrl) else {
-            callback.onFail(["code": -2, "msg": "url 格式错误: \(finalUrl)"])
+            callback.onFail(QXBridgeError.invalidParams("url 格式错误: \(finalUrl)", domain: errorDomain))
             return
         }
         DispatchQueue.main.async {
             guard UIApplication.shared.canOpenURL(url) else {
-                callback.onFail([
-                    "code": -3,
-                    "msg": "当前设备无法打开此 URL",
-                    "url": finalUrl
-                ])
+                callback.onFail(QXBridgeError.make(
+                    .unsupported,
+                    message: "当前设备无法打开此 URL",
+                    domain: self.errorDomain,
+                    data: ["url": finalUrl]
+                ))
                 return
             }
             UIApplication.shared.open(url, options: [:]) { success in
@@ -449,11 +448,11 @@ public class QXBasePlugin: JDBridgeBasePlugin {
                         "url": finalUrl
                     ])
                 } else {
-                    callback.onFail([
-                        "code": -4,
-                        "msg": "打开失败",
-                        "url": finalUrl
-                    ])
+                    callback.onFail(QXBridgeError.failure(
+                        "打开失败",
+                        domain: self.errorDomain,
+                        data: ["url": finalUrl]
+                    ))
                 }
             }
         }

@@ -19,6 +19,116 @@ class Utils {
     }
 }
 
+// MARK: - JDBridge onFail 统一错误构造
+
+/// 与 H5 / Android 对齐的 JSBridge 错误码。
+/// JDBridge 底层只认 NSError 才会把 status 置为非 0，H5 才能走 catch，
+/// 所以所有 `callback.onFail(...)` 必须传 `NSError`，通过本工具统一生成。
+@objc public enum QXBridgeErrorCode: Int {
+    /// 未知错误
+    case unknown = -1
+    /// 通用失败
+    case failure = 1
+    /// 参数错误 / 非法参数
+    case invalidParams = 1000
+    /// 没有权限（相机 / 定位 / 蓝牙 / 通知 等统一用这个）
+    case noPermission = 1001
+    /// 用户取消
+    case cancelled = 1002
+    /// 目标资源 / 页面 / 设备未找到
+    case notFound = 1003
+    /// 超时
+    case timeout = 1004
+    /// 功能未实现 / 不支持
+    case unsupported = 1005
+}
+
+/// JDBridge `onFail` 参数构造工具
+///
+/// 用法:
+/// ```swift
+/// callback.onFail(QXBridgeError.make(.noPermission, message: "没有相机权限"))
+/// callback.onFail(QXBridgeError.noPermission("没有相机权限"))
+/// ```
+@objc public class QXBridgeError: NSObject {
+
+    /// 默认的错误 domain（可在各 plugin 里自行传入覆盖）
+    public static let defaultDomain = "QXBridgeError"
+
+    /// 生成 NSError，`userInfo` 会同时写入 `message / success / data`，
+    /// 并把 `{ "code": ..., "message": ..., "success": false, "data": ... }` 的 JSON 字符串写到
+    /// `NSLocalizedDescriptionKey`，这样 JDBridge 底层取 `error.description` 下发给 H5 时，
+    /// H5 侧 `JSON.parse(err.message)` 就能拿到结构化字段，与 Android 对齐。
+    public static func make(_ code: QXBridgeErrorCode,
+                            message: String,
+                            domain: String = defaultDomain,
+                            data: Any? = nil) -> NSError {
+        return make(code: code.rawValue, message: message, domain: domain, data: data)
+    }
+
+    /// 直接传原始 Int 错误码的重载，供 BLE 这类有自定义错误码体系的插件使用。
+    public static func make(code: Int,
+                            message: String,
+                            domain: String = defaultDomain,
+                            data: Any? = nil) -> NSError {
+        var payload: [String: Any] = [
+            "code": code,
+            "message": message,
+            "success": false
+        ]
+        if let data = data, JSONSerialization.isValidJSONObject(data) {
+            payload["data"] = data
+        }
+
+        let jsonString: String = {
+            if JSONSerialization.isValidJSONObject(payload),
+               let jsonData = try? JSONSerialization.data(withJSONObject: payload, options: []),
+               let str = String(data: jsonData, encoding: .utf8) {
+                return str
+            }
+            return message
+        }()
+
+        var userInfo: [String: Any] = [
+            NSLocalizedDescriptionKey: jsonString,
+            "code": code,
+            "message": message,
+            "success": false
+        ]
+        if let data = data { userInfo["data"] = data }
+
+        return NSError(domain: domain, code: code, userInfo: userInfo)
+    }
+
+    /// 没有权限（相机 / 定位 / 蓝牙 / 通知 等）的快捷方法
+    public static func noPermission(_ message: String = "没有权限",
+                                    domain: String = defaultDomain,
+                                    data: Any? = nil) -> NSError {
+        return make(.noPermission, message: message, domain: domain, data: data)
+    }
+
+    /// 参数非法
+    public static func invalidParams(_ message: String = "参数错误",
+                                     domain: String = defaultDomain,
+                                     data: Any? = nil) -> NSError {
+        return make(.invalidParams, message: message, domain: domain, data: data)
+    }
+
+    /// 未找到（VC / 设备 / 资源 等）
+    public static func notFound(_ message: String = "资源未找到",
+                                domain: String = defaultDomain,
+                                data: Any? = nil) -> NSError {
+        return make(.notFound, message: message, domain: domain, data: data)
+    }
+
+    /// 通用失败
+    public static func failure(_ message: String,
+                               domain: String = defaultDomain,
+                               data: Any? = nil) -> NSError {
+        return make(.failure, message: message, domain: domain, data: data)
+    }
+}
+
 
 
 // MARK: - Data Hex Conversion (Standard Implementation)

@@ -241,12 +241,19 @@ public class QXBleResult {
     /// - Parameters:
     ///   - errorCode: 错误码枚举
     ///   - customMessage: 自定义错误信息（可选，默认使用错误码对应的message）
-    /// - Returns: 格式化的失败结果字典
-    public static func failure(errorCode: QXBleErrorCode, customMessage: String? = nil) -> [String: Any] {
-        return [
-            "code": errorCode.rawValue,
-            "message": customMessage ?? errorCode.message,
-            "data": [:]
-        ]
+    /// - Returns: 用于 JDBridge `onFail` 的 NSError（保留蓝牙原有错误码）
+    ///
+    /// 说明：JDBridge 底层只认 `NSError` 才会把 status 置为非 0，H5 才能走 catch；
+    /// 如果返回字典，status 会保持 "0"，H5 会误判为成功。
+    /// 这里继续保留 `{ code, message, data }` 的 JSON 结构下发，
+    /// H5 侧 `JSON.parse(err.message)` 的字段与改造前完全一致。
+    public static func failure(errorCode: QXBleErrorCode, customMessage: String? = nil) -> NSError {
+        let message = customMessage ?? errorCode.message
+        return QXBridgeError.make(
+            code: errorCode.rawValue,
+            message: message,
+            domain: "QXBlePlugin",
+            data: [:] as [String: Any]
+        )
     }
 }

@@ -165,11 +165,12 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         if let errorCode = stateResult["errorCode"] as? Int, errorCode != 0 {
             // 有错误，返回失败结果
             let errorMessage = stateResult["errorMessage"] as? String ?? "获取蓝牙适配器状态失败"
-            callback.onFail([
-                "code": errorCode,
-                "message": errorMessage,
-                "data": stateResult["data"] ?? [:]
-            ])
+            callback.onFail(QXBridgeError.make(
+                code: errorCode,
+                message: errorMessage,
+                domain: errorDomain,
+                data: stateResult["data"] ?? [:]
+            ))
         } else {
             // 正常，返回成功结果
             callback.onSuccess([
@@ -192,11 +193,12 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         if let errorCode = devicesResult["errorCode"] as? Int, errorCode != 0 {
             // 有错误，返回失败结果
             let errorMessage = devicesResult["errorMessage"] as? String ?? "获取蓝牙设备列表失败"
-            callback.onFail([
-                "code": errorCode,
-                "message": errorMessage,
-                "data": devicesResult["data"] ?? [:]
-            ])
+            callback.onFail(QXBridgeError.make(
+                code: errorCode,
+                message: errorMessage,
+                domain: errorDomain,
+                data: devicesResult["data"] ?? [:]
+            ))
         } else {
             // 正常，返回成功结果
             callback.onSuccess([

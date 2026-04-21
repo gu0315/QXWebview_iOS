@@ -88,8 +88,11 @@ SOFTWARE.
     
     NSMutableDictionary *callbackParams = [NSMutableDictionary dictionary];
     if ([data isKindOfClass:[NSError class]]) {
+        // 只取 localizedDescription：
+        // - 业务侧通常会把 JSON / 用户可读信息放到 userInfo[NSLocalizedDescriptionKey]
+        // - 避免把 "Error Domain=... Code=... UserInfo=..." 这一坨完整描述下发给 H5
         status = [NSString stringWithFormat:@"%@",@(((NSError*)data).code)];
-        msg = ((NSError*)data).description;
+        msg = ((NSError*)data).localizedDescription;
     } else {
         if ([data isKindOfClass:[NSNumber class]]) {
             callbackParams[KJDBridgeData] = [NSString stringWithFormat:@"%@",data];
