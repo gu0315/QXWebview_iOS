@@ -148,7 +148,6 @@ extension QXLocationManager: CLLocationManagerDelegate {
         if clError?.code == .locationUnknown || clError?.code == .network {
             return
         }
-        
         stopAllLocationService()
         invalidateAllTimers()
         // 失败信息也走统一回调
@@ -336,7 +335,6 @@ extension QXLocationManager {
     
     private func handlePermissionDenied() {
         let cacheDict = UserDefaults.standard.dictionary(forKey: kSCCLocationPositioningCache)
-        let requestPermission = paramsData?["requestPermission"] as? Bool ?? false
         // 无论有无缓存、是否要求跳转设置，都必须回调一次"无权限"结果，避免调用方一直等待
         if let cacheDict = cacheDict {
             var result = cacheDict
@@ -348,11 +346,6 @@ extension QXLocationManager {
                                     "hasPermission":false,
                                     "isEnable":false,
                                     "msg":kPermissionDeniedMsg])
-        }
-        if requestPermission,
-           let url = URL(string: UIApplication.openSettingsURLString),
-           UIApplication.shared.canOpenURL(url) {
-            UIApplication.shared.open(url, options: [:])
         }
     }
     
