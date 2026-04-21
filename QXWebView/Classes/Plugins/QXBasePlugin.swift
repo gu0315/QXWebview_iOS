@@ -463,27 +463,21 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         switch type {
         case "", "url", "custom":
             return fallback
-        case "settings", "app-settings", "appsettings":
-            return UIApplication.openSettingsURLString
         case "notification", "notifications", "notification-settings":
             if #available(iOS 16.0, *) {
                 return UIApplication.openNotificationSettingsURLString
-            } else {
-                return UIApplication.openSettingsURLString
             }
-        case "location", "location-settings":
-            // iOS 未提供官方定位设置深链，部分系统版本 App-Prefs 可生效，失败时调用方可改用 settings
-            return "App-Prefs:LOCATION_SERVICES"
-        case "bluetooth", "ble":
-            return "App-Prefs:Bluetooth"
-        case "wifi", "wlan":
-            return "App-Prefs:WIFI"
-        case "cellular", "mobile-data":
-            return "App-Prefs:MOBILE_DATA_SETTINGS_ID"
-        case "general":
-            return "App-Prefs:General"
-        case "privacy":
-            return "App-Prefs:Privacy"
+            return UIApplication.openSettingsURLString
+        case "settings", "app-settings", "appsettings",
+             "camera", "camera-settings",
+             "photo", "photos", "gallery",
+             "location", "location-settings",
+             "bluetooth", "ble",
+             "wifi", "wlan",
+             "cellular", "mobile-data",
+             "general", "privacy":
+            return UIApplication.openSettingsURLString
+
         default:
             return fallback
         }
