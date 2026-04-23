@@ -215,8 +215,30 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     ///   - params: 预留参数（暂无实际用途）
     ///   - callback: 初始化结果回调
     private func initBle(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 初始化蓝牙中心管理器，并传递权限回调
-        QXBleCentralManager.shared.setupCentralManager(permissionCallback: callback)
+        if QXBleUtils.isBluetoothPermissionAuthorized() {
+            QXBleCentralManager.shared.setupCentralManager(permissionCallback: callback)
+            return
+        }
+        
+        if QXBleUtils.isBluetoothPermissionDenied() {
+            callback.onFail(bluetoothPermissionError("蓝牙权限被拒绝，请前往设置开启", data: [
+                "isAuthorized": false,
+                "isDenied": true,
+                "isNotDetermined": false
+            ]))
+            return
+        }
+        
+        callback.onFail(bluetoothPermissionError("蓝牙权限未授权，请先授权", data: [
+            "isAuthorized": false,
+            "isDenied": false,
+            "isNotDetermined": true
+        ]))
+    }
+
+    private func bluetoothPermissionError(_ message: String, data: [String: Any] = [:]) -> NSError {
+        print("bluetoothPermissionError", message)
+        return QXBridgeError.noPermission(message, domain: errorDomain, data: data)
     }
     
     // MARK: - 设备扫描
@@ -237,13 +259,21 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         
         // 权限前置检查：未确定
         if QXBleUtils.isBluetoothPermissionNotDetermined() {
-            callback.onFail(QXBleResult.failure(errorCode: .permissionNotDetermined))
+            callback.onFail(bluetoothPermissionError("蓝牙权限未授权，请先授权", data: [
+                "isAuthorized": false,
+                "isDenied": false,
+                "isNotDetermined": true
+            ]))
             return
         }
         
         // 权限前置检查：已拒绝/受限
         guard QXBleUtils.isBluetoothPermissionAuthorized() else {
-            callback.onFail(QXBleResult.failure(errorCode: .permissionDenied))
+            callback.onFail(bluetoothPermissionError("蓝牙权限被拒绝，请前往设置开启", data: [
+                "isAuthorized": false,
+                "isDenied": true,
+                "isNotDetermined": false
+            ]))
             return
         }
         
