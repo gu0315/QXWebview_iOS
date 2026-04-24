@@ -81,7 +81,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     ) {
         // 设备连接状态校验
         guard peripheral.state == .connected else {
-            callback?.onFail(QXBleResult.failure(errorCode: .deviceNotFound, customMessage: "设备未连接"))
+            callback?.onFail(QXBleResult.failure(errorCode: .noConnection, customMessage: "当前连接已断开"))
             return
         }
         
@@ -112,7 +112,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
     ) {
         // 1. 设备连接状态校验
         guard peripheral.state == .connected else {
-            callback?.onFail(QXBleResult.failure(errorCode: .deviceNotFound, customMessage: "设备未连接"))
+            callback?.onFail(QXBleResult.failure(errorCode: .noConnection, customMessage: "当前连接已断开"))
             return
         }
         
@@ -126,7 +126,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
         
         // 3. 检查写入权限
         guard char.properties.contains(.write) || char.properties.contains(.writeWithoutResponse) else {
-            callback?.onFail(QXBleResult.failure(errorCode: .writeNotSupported))
+            callback?.onFail(QXBleResult.failure(errorCode: .propertyNotSupport, customMessage: "当前特征值不支持写入"))
             return
         }
         
@@ -344,7 +344,7 @@ public class QXBlePeripheralManager: NSObject, CBPeripheralDelegate {
             // 写入失败
             let errorMsg = "写入特征值失败：\(error.localizedDescription)"
             print("❌ \(errorMsg)")
-            callback?.onFail(QXBleResult.failure(errorCode: .unknownError, customMessage: errorMsg))
+            callback?.onFail(QXBleResult.failure(errorCode: .systemError, customMessage: errorMsg))
         } else {
             // 写入成功
             // 优先使用缓存的数据，因为characteristic.value可能为nil
