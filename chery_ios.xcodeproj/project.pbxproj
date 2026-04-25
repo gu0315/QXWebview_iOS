@@ -13,6 +13,8 @@
 		E6B5BFD82E9A1CCB00233959 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = E6B5BFD22E9A1CCB00233959 /* Main.storyboard */; };
 		E6B5BFD92E9A1CCB00233959 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6B5BFCB2E9A1CCB00233959 /* AppDelegate.swift */; };
 		E6B5BFDB2E9A1CCB00233959 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6B5BFD32E9A1CCB00233959 /* ViewController.swift */; };
+		F061A101B001000000000001 /* bridge_test.html in Resources */ = {isa = PBXBuildFile; fileRef = F061A102B001000000000001 /* bridge_test.html */; };
+		F061A103B001000000000001 /* JDBridge.js in Resources */ = {isa = PBXBuildFile; fileRef = F061A104B001000000000001 /* JDBridge.js */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +48,8 @@
 		E6B5BFD12E9A1CCB00233959 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		E6B5BFD32E9A1CCB00233959 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		E6B5C0532E9A4E4C00233959 /* chery_ios-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "chery_ios-Bridging-Header.h"; sourceTree = "<group>"; };
+		F061A102B001000000000001 /* bridge_test.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = bridge_test.html; sourceTree = "<group>"; };
+		F061A104B001000000000001 /* JDBridge.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = JDBridge.js; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -122,6 +126,8 @@
 				E6B5BFD02E9A1CCB00233959 /* LaunchScreen.storyboard */,
 				E6B5BFD22E9A1CCB00233959 /* Main.storyboard */,
 				E6B5BFD32E9A1CCB00233959 /* ViewController.swift */,
+				F061A102B001000000000001 /* bridge_test.html */,
+				F061A104B001000000000001 /* JDBridge.js */,
 				E6B5C0532E9A4E4C00233959 /* chery_ios-Bridging-Header.h */,
 			);
 			path = chery_ios;
@@ -260,6 +266,8 @@
 				E6B5BFD52E9A1CCB00233959 /* Assets.xcassets in Resources */,
 				E6B5BFD72E9A1CCB00233959 /* LaunchScreen.storyboard in Resources */,
 				E6B5BFD82E9A1CCB00233959 /* Main.storyboard in Resources */,
+				F061A101B001000000000001 /* bridge_test.html in Resources */,
+				F061A103B001000000000001 /* JDBridge.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

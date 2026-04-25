@@ -377,6 +377,12 @@ public class QXWebViewController: UIViewController {
             print("URL格式错误：\(urlString)")
             return
         }
+        if url.isFileURL {
+            let readAccessURL = url.deletingLastPathComponent()
+            webView.loadFileURL(url, allowingReadAccessTo: readAccessURL)
+            print("开始加载本地URL: \(urlString)")
+            return
+        }
         // 创建请求
         let request = makeRequest(for: url)
         webView.load(request)
@@ -519,13 +525,17 @@ extension QXWebViewController: WebViewDelegate {
         }
         // 处理 target=_blank 的情况：在当前视图中打开
         if navigationAction.targetFrame == nil {
-            webView.load(makeRequest(for: url))
+            if url.isFileURL {
+                webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+            } else {
+                webView.load(makeRequest(for: url))
+            }
             decisionHandler(.cancel)
             return
         }
         // 处理外部 scheme
         let scheme = url.scheme?.lowercased() ?? ""
-        let allowedSchemes: Set<String> = ["http", "https"]
+        let allowedSchemes: Set<String> = ["http", "https", "file"]
         if !allowedSchemes.contains(scheme) {
             if UIApplication.shared.canOpenURL(url) {
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)

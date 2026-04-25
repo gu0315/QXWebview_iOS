@@ -33,6 +33,17 @@ class ViewController: UIViewController {
         button.addTarget(self, action: #selector(publicChargingAction), for: .touchUpInside)
         return button
     }()
+
+    private lazy var testPageButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("测试", for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 18, weight: .medium)
+        button.backgroundColor = .systemOrange
+        button.setTitleColor(.white, for: .normal)
+        button.layer.cornerRadius = 12
+        button.addTarget(self, action: #selector(testPageAction), for: .touchUpInside)
+        return button
+    }()
     
     // MARK: - Initialization
     required init?(coder: NSCoder) {
@@ -59,6 +70,7 @@ class ViewController: UIViewController {
         
         view.addSubview(homeChargingButton)
         view.addSubview(publicChargingButton)
+        view.addSubview(testPageButton)
         
         homeChargingButton.snp.makeConstraints { make in
             make.centerX.equalToSuperview()
@@ -73,6 +85,13 @@ class ViewController: UIViewController {
             make.width.equalTo(200)
             make.height.equalTo(50)
         }
+
+        testPageButton.snp.makeConstraints { make in
+            make.centerX.equalToSuperview()
+            make.top.equalTo(publicChargingButton.snp.bottom).offset(30)
+            make.width.equalTo(200)
+            make.height.equalTo(50)
+        }
     }
     
     // MARK: - Actions
@@ -84,6 +103,18 @@ class ViewController: UIViewController {
     
     @objc private func publicChargingAction() {
         let vc = QXWebViewController(url: publicChargingUrl)
+        vc.hostDelegate = self
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
+    @objc private func testPageAction() {
+        guard let localURL = Bundle.main.url(forResource: "bridge_test", withExtension: "html") else {
+            let alert = UIAlertController(title: "资源缺失", message: "未找到 bridge_test.html", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "确定", style: .default))
+            present(alert, animated: true)
+            return
+        }
+        let vc = QXWebViewController(url: localURL.absoluteString)
         vc.hostDelegate = self
         navigationController?.pushViewController(vc, animated: true)
     }
