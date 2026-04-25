@@ -11,12 +11,14 @@ import Foundation
 @objc(QXHostBridgePlugin)
 public class QXHostBridgePlugin: JDBridgeBasePlugin {
     
-    private func hostDelegate(for callback: JDBridgeCallBack) -> QXWebViewHostDelegate? {
-        if let viewController = callback.webViewController as? QXWebViewController {
-            return viewController.hostDelegate
+    private func hostContext(for callback: JDBridgeCallBack) -> (delegate: QXWebViewHostDelegate, viewController: QXWebViewController?)? {
+        if let viewController = callback.webViewController as? QXWebViewController,
+           let delegate = viewController.hostDelegate {
+            return (delegate, viewController)
         }
-        if let viewController = callback.findWebViewController() {
-            return viewController.hostDelegate
+        if let viewController = callback.findWebViewController(),
+           let delegate = viewController.hostDelegate {
+            return (delegate, viewController)
         }
         return nil
     }
@@ -36,25 +38,45 @@ public class QXHostBridgePlugin: JDBridgeBasePlugin {
     }
     
     private func openPage(_ params: [String: Any], callback: JDBridgeCallBack) {
-        guard let url = params["url"] as? String else {
-            callbackError(message: "缺少 url", callback: callback)
+        let url = (params["url"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? (params["pageName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let targetURL = url, !targetURL.isEmpty else {
+            callbackError(message: "缺少 url/pageName", callback: callback)
             return
         }
         let pageParams = params["params"] as? [String: Any]
-        if let delegate = hostDelegate(for: callback) {
-            delegate.webViewRequestOpenPage?(url: url, params: pageParams) { [weak self] result in
-                self?.callbackSuccess(data: result ?? ["success": true], callback: callback)
+        if let context = hostContext(for: callback) {
+            if let viewController = context.viewController,
+               let _ = context.delegate.webViewRequestOpenPage?(webViewController: viewController, url: targetURL, params: pageParams, completion: { [weak self] result in
+                    self?.callbackSuccess(data: result ?? ["success": true], callback: callback)
+                }) {
+                return
             }
+            if let _ = context.delegate.webViewRequestOpenPage?(url: targetURL, params: pageParams, completion: { [weak self] result in
+                self?.callbackSuccess(data: result ?? ["success": true], callback: callback)
+            }) {
+                return
+            }
+            callbackError(message: "宿主 APP 未实现 delegate 或未设置 hostDelegate", callback: callback)
         } else {
             callbackError(message: "宿主 APP 未实现 delegate 或未设置 hostDelegate", callback: callback)
         }
     }
     
     private func callCustomMethod(_ methodName: String, params: [String: Any], callback: JDBridgeCallBack) {
-        if let delegate = hostDelegate(for: callback) {
-            delegate.webViewRequestCustomMethod?(methodName: methodName, params: params) { [weak self] result in
-                self?.callbackSuccess(data: result ?? ["success": true], callback: callback)
+        if let context = hostContext(for: callback) {
+            if let viewController = context.viewController,
+               let _ = context.delegate.webViewRequestCustomMethod?(webViewController: viewController, methodName: methodName, params: params, completion: { [weak self] result in
+                    self?.callbackSuccess(data: result ?? ["success": true], callback: callback)
+                }) {
+                return
             }
+            if let _ = context.delegate.webViewRequestCustomMethod?(methodName: methodName, params: params, completion: { [weak self] result in
+                self?.callbackSuccess(data: result ?? ["success": true], callback: callback)
+            }) {
+                return
+            }
+            callbackError(message: "宿主 APP 未实现 delegate 或未设置 hostDelegate", callback: callback)
         } else {
             callbackError(message: "宿主 APP 未实现 delegate 或未设置 hostDelegate", callback: callback)
         }

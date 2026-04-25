@@ -49,7 +49,7 @@ navigationController?.pushViewController(webVC, animated: true)
 class MyHostDelegate: NSObject, QXWebViewHostDelegate {
     
     // 打开页面
-    func webViewRequestOpenPage(pageName: String, params: [String: Any]?, completion: @escaping (Any?) -> Void) {
+    func webViewRequestOpenPage(url: String, params: [String: Any]?, completion: @escaping (Any?) -> Void) {
         // 处理页面跳转
         completion(["success": true])
     }
@@ -71,7 +71,8 @@ class MyHostDelegate: NSObject, QXWebViewHostDelegate {
 ```javascript
 // 打开页面
 window.QXHostBridgePlugin.openPage({
-    pageName: 'app://home',
+    // SDK 同时兼容 url / pageName，推荐优先使用 url
+    url: 'app://home',
     params: { userId: '123' }
 }, function(result, error) {
     console.log(result);

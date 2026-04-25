@@ -12,11 +12,18 @@ import UIKit
     
     /// SDK 请求打开宿主 APP 的页面
     /// - Parameters:
-    ///   - pageName: 页面名称/路由
+    ///   - url: 页面名称/路由
     ///   - params: 参数
     ///   - completion: 执行结果回调
     @objc optional func webViewRequestOpenPage(url: String, 
                                                params: [String: Any]?, 
+                                               completion: @escaping (Any?) -> Void)
+
+    /// SDK 请求打开宿主 APP 的页面（增强版，携带来源 WebViewController）
+    /// 仅作为增量能力开放，未实现时会自动回退到旧方法。
+    @objc optional func webViewRequestOpenPage(webViewController: QXWebViewController,
+                                               url: String,
+                                               params: [String: Any]?,
                                                completion: @escaping (Any?) -> Void)
     
     /// SDK 请求调用宿主 APP 的自定义方法
@@ -26,5 +33,12 @@ import UIKit
     ///   - completion: 执行结果回调
     @objc optional func webViewRequestCustomMethod(methodName: String, 
                                                    params: [String: Any]?, 
+                                                   completion: @escaping (Any?) -> Void)
+
+    /// SDK 请求调用宿主 APP 的自定义方法（增强版，携带来源 WebViewController）
+    /// 仅作为增量能力开放，未实现时会自动回退到旧方法。
+    @objc optional func webViewRequestCustomMethod(webViewController: QXWebViewController,
+                                                   methodName: String,
+                                                   params: [String: Any]?,
                                                    completion: @escaping (Any?) -> Void)
 }
