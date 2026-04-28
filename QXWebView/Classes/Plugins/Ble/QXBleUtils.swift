@@ -128,23 +128,19 @@ public class QXBleUtils {
     }
     
     // MARK: - 蓝牙权限检查方法
-    
-    /// 检查蓝牙权限状态（iOS 13.1+）
-    /// - Returns: 蓝牙权限授权状态
+    /// 检查蓝牙权限状态（iOS 13.1+）。
     @available(iOS 13.1, *)
     public static func checkBluetoothPermission() -> CBManagerAuthorization {
         return CBCentralManager.authorization
     }
-    
-    /// 检查蓝牙权限状态（iOS 13以下）
-    /// - Returns: 蓝牙权限授权状态
+
+    /// 检查蓝牙权限状态（iOS 13 以下）。
     @available(iOS, deprecated: 13.0, message: "使用 checkBluetoothPermission() 替代")
     public static func checkBluetoothPermissionLegacy() -> CBPeripheralManagerAuthorizationStatus {
         return CBPeripheralManager.authorizationStatus()
     }
-    
+
     /// 判断蓝牙权限是否已授权
-    /// - Returns: true表示已授权，false表示未授权
     public static func isBluetoothPermissionAuthorized() -> Bool {
         if #available(iOS 13.1, *) {
             let auth = checkBluetoothPermission()
@@ -154,9 +150,8 @@ public class QXBleUtils {
             return status == .authorized
         }
     }
-    
+
     /// 判断蓝牙权限是否被拒绝
-    /// - Returns: true表示已拒绝，false表示未拒绝
     public static func isBluetoothPermissionDenied() -> Bool {
         if #available(iOS 13.1, *) {
             let auth = checkBluetoothPermission()
@@ -166,9 +161,8 @@ public class QXBleUtils {
             return status == .denied
         }
     }
-    
+
     /// 判断蓝牙权限是否未确定
-    /// - Returns: true表示未确定，false表示已确定
     public static func isBluetoothPermissionNotDetermined() -> Bool {
         if #available(iOS 13.1, *) {
             let auth = checkBluetoothPermission()

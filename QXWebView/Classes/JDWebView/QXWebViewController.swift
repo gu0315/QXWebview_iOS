@@ -231,7 +231,7 @@ public class QXWebViewController: UIViewController {
             isNavigationBarHidden = hidden
         }
     }
-    
+
     // MARK: - 布局更新方法
     
     /// 统一处理布局相关的UI更新
@@ -387,6 +387,24 @@ public class QXWebViewController: UIViewController {
         let request = makeRequest(for: url)
         webView.load(request)
         print("开始加载URL: \(urlString)")
+    }
+
+    public func refreshForNetworkRecovery(url fallbackURLString: String? = nil) {
+        if let currentURL = webView.realWebView.url {
+            if currentURL.isFileURL {
+                webView.loadFileURL(currentURL, allowingReadAccessTo: currentURL.deletingLastPathComponent())
+            } else {
+                webView.realWebView.reloadFromOrigin()
+            }
+            print("网络状态恢复，刷新当前 H5 页面")
+            return
+        }
+
+        let targetURLString = fallbackURLString ?? urlString
+        if let targetURLString {
+            loadURL(targetURLString)
+            print("网络状态恢复，重新加载初始 H5 页面")
+        }
     }
 
     /// 解析URL参数
