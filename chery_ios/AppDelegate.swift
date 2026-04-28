@@ -13,7 +13,7 @@ import QXWebView
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
-    private let homeChargingUrl = "https://test-fr-home-charge-web.cheryge.com/#/"
+    private let homeChargingUrl = "https://test-fr-home-charge-web.cheryge.com/#/pages/bluetooth-test/index"
     private let networkMonitor = NWPathMonitor()
     private let networkMonitorQueue = DispatchQueue(label: "com.chery.app.network-monitor")
     private var lastNetworkStatus: NWPath.Status?
@@ -21,12 +21,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private var lastRefreshAt: Date?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // 初始化应用
         setupApplication()
-        // 创建窗口
         self.window = UIWindow(frame: UIScreen.main.bounds)
         self.window?.backgroundColor = .white
-        // 显示启动屏幕
         showLaunchScreen()
         startNetworkMonitoring()
         return true

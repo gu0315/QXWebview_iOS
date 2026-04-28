@@ -513,16 +513,12 @@ extension UIViewController {
 
 extension UIApplication {
     var topViewController: UIViewController? {
-        if #available(iOS 13.0, *) {
-            let window = connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first?
-                .windows
-                .first(where: { $0.isKeyWindow })
-            return window?.rootViewController?.topMostViewController()
-        } else {
-            return keyWindow?.rootViewController?.topMostViewController()
-        }
+        let window = connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?
+            .windows
+            .first(where: { $0.isKeyWindow })
+        return window?.rootViewController?.topMostViewController()
     }
 }
 

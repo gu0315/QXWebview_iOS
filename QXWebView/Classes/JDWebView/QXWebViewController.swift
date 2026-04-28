@@ -108,11 +108,7 @@ public class QXWebViewController: UIViewController {
         if isImmersiveStatusBar {
             return .lightContent
         } else {
-            if #available(iOS 13.0, *) {
-                return .darkContent
-            } else {
-                return .default
-            }
+            return .darkContent
         }
     }
     

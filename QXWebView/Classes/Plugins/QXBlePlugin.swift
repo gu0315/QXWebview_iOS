@@ -68,15 +68,9 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     private func checkBluetoothPermission(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
         var permissionData: [String: Any] = [:]
         
-        if #available(iOS 13.1, *) {
-            let auth = QXBleUtils.checkBluetoothPermission()
-            permissionData["authorization"] = auth.rawValue
-            permissionData["authorizationDesc"] = auth.description
-        } else {
-            let status = QXBleUtils.checkBluetoothPermissionLegacy()
-            permissionData["authorization"] = status.rawValue
-            permissionData["authorizationDesc"] = status.description
-        }
+        let auth = QXBleUtils.checkBluetoothPermission()
+        permissionData["authorization"] = auth.rawValue
+        permissionData["authorizationDesc"] = auth.description
         
         permissionData["isAuthorized"] = QXBleUtils.isBluetoothPermissionAuthorized()
         permissionData["isDenied"] = QXBleUtils.isBluetoothPermissionDenied()
@@ -467,9 +461,8 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     }
 }
 
-// MARK: - 权限状态扩展（iOS 13+）
+// MARK: - 权限状态扩展
 /// 扩展CBManagerAuthorization，提供可读的权限状态描述
-@available(iOS 13.0, *)
 extension CBManagerAuthorization: @retroactive CustomStringConvertible {
     public var description: String {
         switch self {

@@ -644,58 +644,30 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     /// - Parameter permissionCallback: 权限回调对象
     @discardableResult
     private func handlePermissionCallback(permissionCallback: JDBridgeCallBack) -> Bool {
-        if #available(iOS 13.1, *) {
-            let auth = QXBleUtils.checkBluetoothPermission()
-            switch auth {
-            case .allowedAlways:
-                permissionCallback.onSuccess(QXBleResult.success(message: "蓝牙权限授权成功"))
-                return true
-            case .denied:
-                permissionCallback.onFail(QXBridgeError.noPermission("蓝牙权限被拒绝，请前往设置开启", data: [
-                    "isAuthorized": false,
-                    "isDenied": true,
-                    "isNotDetermined": false
-                ]))
-                return true
-            case .notDetermined:
-                return false
-            case .restricted:
-                permissionCallback.onFail(QXBridgeError.noPermission("蓝牙权限受限制", data: [
-                    "isAuthorized": false,
-                    "isDenied": true,
-                    "isNotDetermined": false
-                ]))
-                return true
-            @unknown default:
-                permissionCallback.onFail(QXBleResult.failure(errorCode: .unknownError))
-                return true
-            }
-        } else {
-            let status = QXBleUtils.checkBluetoothPermissionLegacy()
-            switch status {
-            case .authorized:
-                permissionCallback.onSuccess(QXBleResult.success(message: "蓝牙权限授权成功"))
-                return true
-            case .denied:
-                permissionCallback.onFail(QXBridgeError.noPermission("蓝牙权限被拒绝，请前往设置开启", data: [
-                    "isAuthorized": false,
-                    "isDenied": true,
-                    "isNotDetermined": false
-                ]))
-                return true
-            case .notDetermined:
-                return false
-            case .restricted:
-                permissionCallback.onFail(QXBridgeError.noPermission("蓝牙权限受限制", data: [
-                    "isAuthorized": false,
-                    "isDenied": true,
-                    "isNotDetermined": false
-                ]))
-                return true
-            @unknown default:
-                permissionCallback.onFail(QXBleResult.failure(errorCode: .unknownError))
-                return true
-            }
+        let auth = QXBleUtils.checkBluetoothPermission()
+        switch auth {
+        case .allowedAlways:
+            permissionCallback.onSuccess(QXBleResult.success(message: "蓝牙权限授权成功"))
+            return true
+        case .denied:
+            permissionCallback.onFail(QXBridgeError.noPermission("蓝牙权限被拒绝，请前往设置开启", data: [
+                "isAuthorized": false,
+                "isDenied": true,
+                "isNotDetermined": false
+            ]))
+            return true
+        case .notDetermined:
+            return false
+        case .restricted:
+            permissionCallback.onFail(QXBridgeError.noPermission("蓝牙权限受限制", data: [
+                "isAuthorized": false,
+                "isDenied": true,
+                "isNotDetermined": false
+            ]))
+            return true
+        @unknown default:
+            permissionCallback.onFail(QXBleResult.failure(errorCode: .unknownError))
+            return true
         }
     }
     

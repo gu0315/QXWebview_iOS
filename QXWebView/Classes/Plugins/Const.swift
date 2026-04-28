@@ -21,13 +21,9 @@ public extension Const {
     static let screenHeight = UIScreen.main.bounds.size.height
     /// 状态栏高度
     static var statusBarHeight: CGFloat {
-        if #available(iOS 13.0, *) {
-            let windowScene = UIApplication.shared.connectedScenes
-                .first { $0.activationState == .foregroundActive } as? UIWindowScene
-            return windowScene?.statusBarManager?.statusBarFrame.height ?? 0
-        } else {
-            return UIApplication.shared.statusBarFrame.height
-        }
+        let windowScene = UIApplication.shared.connectedScenes
+            .first { $0.activationState == .foregroundActive } as? UIWindowScene
+        return windowScene?.statusBarManager?.statusBarFrame.height ?? 0
     }
 
     /// 导航栏高度
