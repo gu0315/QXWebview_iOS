@@ -229,11 +229,8 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        callback.onFail(bluetoothPermissionError("蓝牙权限未授权，请先授权", data: [
-            "isAuthorized": false,
-            "isDenied": false,
-            "isNotDetermined": true
-        ]))
+        // 首次未授权时先初始化 CBCentralManager，交给系统触发蓝牙权限弹窗。
+        QXBleCentralManager.shared.setupCentralManager(permissionCallback: callback)
     }
 
     private func bluetoothPermissionError(_ message: String, data: [String: Any] = [:]) -> NSError {
