@@ -869,6 +869,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         let isUnexpectedDisconnect = !wasIntentionalDisconnect
         if let error = error {
             print("⚠️ 设备异常断开：\(peripheral.name ?? "未知") (\(deviceId)) \(error.localizedDescription)")
+            
         } else {
             let disconnectType = isUnexpectedDisconnect ? "异常断开" : "正常断开"
             print("🔌 设备\(disconnectType)：\(peripheral.name ?? "未知") (\(deviceId))")

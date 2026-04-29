@@ -12,6 +12,14 @@ import AVFoundation
 
 /// 媒体插件 - 处理图片、视频等媒体功能
 @objc class MediaPlugin: JDBridgeBasePlugin {
+    private var topViewController: UIViewController? {
+        let window = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?
+            .windows
+            .first(where: { $0.isKeyWindow })
+        return window?.rootViewController
+    }
     
     override func excute(_ action: String, params: [AnyHashable : Any], callback: JDBridgeCallBack) -> Bool {
         switch action {
@@ -52,7 +60,7 @@ import AVFoundation
             imagePicker.sourceType = allowCamera ? .photoLibrary : .savedPhotosAlbum
             imagePicker.allowsEditing = true
             
-            if let topVC = UIApplication.shared.keyWindow?.rootViewController {
+            if let topVC = topViewController {
                 topVC.present(imagePicker, animated: true)
             }
         }
@@ -69,7 +77,7 @@ import AVFoundation
             imagePicker.mediaTypes = ["public.movie"]
             imagePicker.videoMaximumDuration = maxDuration
             
-            if let topVC = UIApplication.shared.keyWindow?.rootViewController {
+            if let topVC = topViewController {
                 topVC.present(imagePicker, animated: true)
             }
         }
@@ -88,7 +96,7 @@ import AVFoundation
             imagePicker.sourceType = .camera
             imagePicker.allowsEditing = true
             
-            if let topVC = UIApplication.shared.keyWindow?.rootViewController {
+            if let topVC = topViewController {
                 topVC.present(imagePicker, animated: true)
             }
         }
@@ -110,7 +118,7 @@ import AVFoundation
             imagePicker.mediaTypes = ["public.movie"]
             imagePicker.videoMaximumDuration = maxDuration
             
-            if let topVC = UIApplication.shared.keyWindow?.rootViewController {
+            if let topVC = topViewController {
                 topVC.present(imagePicker, animated: true)
             }
         }

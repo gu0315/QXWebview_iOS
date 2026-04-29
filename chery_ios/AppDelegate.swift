@@ -13,7 +13,7 @@ import QXWebView
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
-    private let homeChargingUrl = "https://test-fr-home-charge-web.cheryge.com/#/pages/bluetooth-test/index"
+    private let homeChargingUrl = "https://fr.dongxie.top/fr/#/pages/bluetooth-test/index"
     private let networkMonitor = NWPathMonitor()
     private let networkMonitorQueue = DispatchQueue(label: "com.chery.app.network-monitor")
     private var lastNetworkStatus: NWPath.Status?
