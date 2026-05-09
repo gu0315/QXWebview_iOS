@@ -369,12 +369,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         }
         
         registerCallback(callback, forKey: callbackKey)
-        
         print("🔌 准备断开设备：\(deviceId)")
-        
         setDisconnectReason(.appInitiated, for: deviceId)
         cancelReconnection(for: deviceId)
-        
         if let peripheral = currentConnectedPeripheral, peripheral.identifier.uuidString == deviceId {
             if peripheral.state == .connected {
                 print("🔗 设备已连接，发起断开请求：\(peripheral.name ?? "未知")")
