@@ -475,18 +475,6 @@ extension CBManagerAuthorization: @retroactive CustomStringConvertible {
     }
 }
 
-extension CBPeripheralManagerAuthorizationStatus: @retroactive CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .notDetermined: return "未确定"
-        case .restricted: return "受限制（系统策略限制）"
-        case .denied: return "已拒绝"
-        case .authorized: return "已授权"
-        @unknown default: return "未知权限状态(\(rawValue))"
-        }
-    }
-}
-
 // MARK: - Data 16进制扩展
 /// 扩展Data，支持从16进制字符串初始化
 extension Data {

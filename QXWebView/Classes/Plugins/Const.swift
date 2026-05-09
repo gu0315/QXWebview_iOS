@@ -52,7 +52,7 @@ public extension Const {
 
     /// 是否是iphoneX
     static var isIphoneX: Bool {
-        guard UI_USER_INTERFACE_IDIOM() == .phone else { return false }
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return false }
         guard #available(iOS 11.0, *) else { return false }
         guard let window = UIApplication.shared.windows.first else { return false }
         let isX = window.safeAreaInsets.bottom > 0

@@ -130,7 +130,26 @@ public class QXBleUtils {
     // MARK: - 蓝牙权限检查方法
     /// 检查蓝牙权限状态。
     public static func checkBluetoothPermission() -> CBManagerAuthorization {
-        return CBCentralManager.authorization
+        if #available(iOS 13.1, *) {
+            return CBCentralManager.authorization
+        }
+        return legacyBluetoothPermission()
+    }
+
+    @available(iOS, introduced: 2.0, deprecated: 13.0)
+    private static func legacyBluetoothPermission() -> CBManagerAuthorization {
+        switch CBPeripheralManager.authorizationStatus() {
+        case .notDetermined:
+            return .notDetermined
+        case .restricted:
+            return .restricted
+        case .denied:
+            return .denied
+        case .authorized:
+            return .allowedAlways
+        @unknown default:
+            return .notDetermined
+        }
     }
 
     /// 判断蓝牙权限是否已授权
