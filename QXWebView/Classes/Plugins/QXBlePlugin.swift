@@ -399,12 +399,26 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        // 生成特征发现回调Key并注册
-        let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.discoverCharacteristics.prefix, deviceId: deviceId)
-        QXBlePeripheralManager.shared.registerCallback(callback, forKey: callbackKey)
-        
         // 转换服务UUID为CBUUID
         let serviceCBUUID = CBUUID(string: serviceId)
+        
+        // 如果特征已缓存，直接返回，避免 iOS 不重复触发 discover 回调导致调用悬挂。
+        let cacheKey = "\(deviceId)_\(serviceCBUUID.uuidString)"
+        if let chars = QXBlePeripheralManager.shared.characteristicsCache[cacheKey] {
+            callback.onSuccess(QXBleResult.success(
+                data: ["characteristics": QXBleUtils.formatCharacteristics(chars, serviceId: serviceCBUUID.uuidString)],
+                message: "获取特征成功，共\(chars.count)个特征"
+            ))
+            return
+        }
+        
+        // 生成服务粒度特征发现回调Key并注册，避免等待其它服务的特征发现结果。
+        let callbackKey = QXBleUtils.generateCallbackKey(
+            prefix: QXBleCallbackType.discoverCharacteristics.prefix,
+            deviceId: deviceId,
+            serviceId: serviceCBUUID.uuidString
+        )
+        QXBlePeripheralManager.shared.registerCallback(callback, forKey: callbackKey)
         
         // 检查服务是否已缓存
         if let services = QXBlePeripheralManager.shared.servicesCache[deviceId],

@@ -54,9 +54,9 @@ class ViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
     
-    let homeChargingUrl = "https://test-fr-home-charge-web.cheryge.com/#/"
+    let homeChargingUrl = "http://192.168.31.137:5174//#/pages/bluetooth-test/index"
     
-    let publicChargingUrl = "http://192.168.31.137:5173/#/pages/bluetooth-test/index"
+    let publicChargingUrl = "http://192.168.31.137:5174//#/pages/bluetooth-test/index"
     
     // MARK: - Lifecycle
     override func viewDidLoad() {

@@ -103,6 +103,16 @@ public class QXBleUtils {
         return "\(prefix)_\(deviceId)"
     }
     
+    /// 生成回调Key（前缀+设备ID+服务ID）
+    /// - Parameters:
+    ///   - prefix: 回调类型前缀
+    ///   - deviceId: 设备唯一标识
+    ///   - serviceId: 服务UUID
+    /// - Returns: 回调Key字符串
+    public static func generateCallbackKey(prefix: String, deviceId: String, serviceId: String) -> String {
+        return "\(generateCallbackKey(prefix: prefix, deviceId: deviceId))_\(serviceId)"
+    }
+    
     /// 生成回调Key（使用枚举类型）
     /// - Parameters:
     ///   - type: 回调类型枚举

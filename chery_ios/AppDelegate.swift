@@ -13,7 +13,9 @@ import QXWebView
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
-    private let homeChargingUrl = "https://fr.dongxie.top/fr/#/pages/bluetooth-test/index"
+    // "https://test-fr-home-charge-web.cheryge.com/#/pages/bluetooth-test/index"
+    private let homeChargingUrl = "http://172.20.10.4:5173/#/pages/bluetooth-test/index"
+    //"https://test-fr-home-charge-web.cheryge.com/#/pages/bluetooth-test/index"
     private let networkMonitor = NWPathMonitor()
     private let networkMonitorQueue = DispatchQueue(label: "com.chery.app.network-monitor")
     private var lastNetworkStatus: NWPath.Status?
@@ -107,7 +109,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
         return viewController as? QXWebViewController
     }
-
 }
 
 extension AppDelegate: QXWebViewHostDelegate {
@@ -126,7 +127,7 @@ extension AppDelegate: QXWebViewHostDelegate {
             ])
         case "app://login":
             let result: [String: Any] = [
-                "phone": "xxx",
+                "phone": "15755336837",
                 "list": [
                     ["vin": "vin1", "mac": "mac1"],
                     ["vin": "vin2", "mac": "mac2"],
@@ -157,14 +158,14 @@ extension AppDelegate: QXWebViewHostDelegate {
             completion(["token": "xxx"])
         case "getUserInfo":
             let result: [String: Any] = [
-                "phone": "xxx",
+                "phone": "15755336837",
                 "list": [
                     ["vin": "vin1", "mac": "mac1"],
                     ["vin": "vin2", "mac": "mac2"],
                     ["vin": "vin3", "mac": "mac3"]
                 ],
                 "userId": "xxx",
-                "isLogin": false,
+                "isLogin": true,
                 "userName": "xxx"
             ]
             completion(result)
