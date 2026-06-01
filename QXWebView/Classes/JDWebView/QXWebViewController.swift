@@ -156,7 +156,7 @@ public class QXWebViewController: UIViewController {
             configuration: configuration
         )
         if #available(iOS 16.4, *) {
-            webView.realWebView.isInspectable = false
+            webView.realWebView.isInspectable = true
         }
         webView.delegate = self
         webView.backgroundColor = .systemBackground

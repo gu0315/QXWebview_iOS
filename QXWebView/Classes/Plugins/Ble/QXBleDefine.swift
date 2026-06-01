@@ -257,3 +257,38 @@ public class QXBleResult {
         )
     }
 }
+
+// MARK: - 蓝牙权限错误工厂
+/// 与 H5 / Android 对齐的权限错误结构，data 字段统一携带
+/// `{ isAuthorized, isDenied, isNotDetermined }`，避免散落手写。
+extension QXBridgeError {
+    /// 蓝牙权限被拒绝（用户在系统设置里关掉了蓝牙权限）
+    public static func bluetoothDenied(_ message: String = "蓝牙权限被拒绝，请前往设置开启",
+                                       domain: String = "QXBlePlugin") -> NSError {
+        return noPermission(message, domain: domain, data: [
+            "isAuthorized": false,
+            "isDenied": true,
+            "isNotDetermined": false
+        ])
+    }
+
+    /// 蓝牙权限未确定（系统尚未弹过权限弹窗）
+    public static func bluetoothNotDetermined(_ message: String = "蓝牙权限未授权，请先授权",
+                                              domain: String = "QXBlePlugin") -> NSError {
+        return noPermission(message, domain: domain, data: [
+            "isAuthorized": false,
+            "isDenied": false,
+            "isNotDetermined": true
+        ])
+    }
+
+    /// 蓝牙权限受限制（家长控制 / MDM 等系统策略限制）
+    public static func bluetoothRestricted(_ message: String = "蓝牙权限受限制",
+                                           domain: String = "QXBlePlugin") -> NSError {
+        return noPermission(message, domain: domain, data: [
+            "isAuthorized": false,
+            "isDenied": true,
+            "isNotDetermined": false
+        ])
+    }
+}

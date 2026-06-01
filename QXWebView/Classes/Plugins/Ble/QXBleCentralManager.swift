@@ -29,8 +29,11 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     private(set) public var currentConnectedDeviceId: String?
     
     // MARK: - Callbacks
-    /// 一次性操作回调，按 callbackKey 管理生命周期。
-    private var callbacks: [String: JDBridgeCallBack] = [:]
+    /// 一次性操作回调容器，统一处理注册 / 取出 / 超时。
+    private let callbackStore = QXBleCallbackStore()
+
+    /// 单次连接的默认超时（秒）；超时后给 JS 端 fail，避免 Promise 悬挂。
+    private static let connectTimeoutSeconds: TimeInterval = 15.0
 
     /// 权限弹窗串行返回，这里保留所有待完成的调用方。
     private var permissionCallbacks: [JDBridgeCallBack] = []
@@ -65,16 +68,12 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         
         if QXBleUtils.isBluetoothPermissionDenied() {
             resolvePermissionCallbacks { callback in
-                callback.onFail(QXBridgeError.noPermission("蓝牙权限被拒绝，请前往设置开启", data: [
-                    "isAuthorized": false,
-                    "isDenied": true,
-                    "isNotDetermined": false
-                ]))
+                callback.onFail(QXBridgeError.bluetoothDenied())
                 return true
             }
             return
         }
-        
+
         if centralManager == nil {
             let options: [String: Any] = [CBCentralManagerOptionShowPowerAlertKey: true]
             centralManager = CBCentralManager(delegate: self, queue: DispatchQueue.main, options: options)
@@ -86,21 +85,17 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
                 }
             } else if QXBleUtils.isBluetoothPermissionDenied() {
                 resolvePermissionCallbacks { callback in
-                    callback.onFail(QXBridgeError.noPermission("蓝牙权限被拒绝，请前往设置开启", data: [
-                        "isAuthorized": false,
-                        "isDenied": true,
-                        "isNotDetermined": false
-                    ]))
+                    callback.onFail(QXBridgeError.bluetoothDenied())
                     return true
                 }
             }
         }
     }
-    
+
     // MARK: - Permission
     public func requestBluetoothPermission(callback: JDBridgeCallBack?) {
         enqueuePermissionCallback(callback)
-        
+
         if QXBleUtils.isBluetoothPermissionAuthorized() {
             resolvePermissionCallbacks { callback in
                 callback.onSuccess(QXBleResult.success(message: "蓝牙权限已授权"))
@@ -108,19 +103,15 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             }
             return
         }
-        
+
         if QXBleUtils.isBluetoothPermissionDenied() {
             resolvePermissionCallbacks { callback in
-                callback.onFail(QXBridgeError.noPermission("蓝牙权限被拒绝，请前往设置开启", data: [
-                    "isAuthorized": false,
-                    "isDenied": true,
-                    "isNotDetermined": false
-                ]))
+                callback.onFail(QXBridgeError.bluetoothDenied())
                 return true
             }
             return
         }
-        
+
         setupCentralManager(permissionCallback: callback)
     }
     
@@ -133,14 +124,10 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         }
         
         guard QXBleUtils.isBluetoothPermissionAuthorized() else {
-            callback?.onFail(QXBridgeError.noPermission("蓝牙权限被拒绝，请前往设置开启", data: [
-                "isAuthorized": false,
-                "isDenied": true,
-                "isNotDetermined": false
-            ]))
+            callback?.onFail(QXBridgeError.bluetoothDenied())
             return false
         }
-        
+
         guard state == .poweredOn else {
             callback?.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen))
             return false
@@ -162,7 +149,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         centralManager.scanForPeripherals(withServices: services, options: scanOptions)
         
         scheduleScanTimeout(timeout: timeout, callbackKey: callbackKey)
-        print("开始扫描蓝牙设备")
+        QXBleLogger.log("开始扫描蓝牙设备")
         return true
     }
     
@@ -175,13 +162,13 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         }
         
         guard centralManager.isScanning else {
-            print("当前未在扫描，无需停止")
+            QXBleLogger.log("当前未在扫描，无需停止")
             removeCallback(forKey: callbackKey)
             return
         }
         
         centralManager.stopScan()
-        print("已停止扫描，共发现\(discoveredPeripherals.count)个设备")
+        QXBleLogger.log("已停止扫描，共发现\(discoveredPeripherals.count)个设备")
         
         if let callback = callback(forKey: callbackKey) {
             let result = QXBleResult.success(
@@ -199,7 +186,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             guard let centralManager = self.centralManager, centralManager.isScanning else { return }
-            print("⏱️ 扫描超时，自动停止扫描")
+            QXBleLogger.log("⏱️ 扫描超时，自动停止扫描")
             self.stopScan(callbackKey: callbackKey)
         }
         scanTimeoutWorkItem = workItem
@@ -213,39 +200,36 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
 
     // MARK: - Callback Helpers
     private func registerCallback(_ callback: JDBridgeCallBack?, forKey key: String) {
-        guard let callback else { return }
-        callbacks[key] = callback
+        callbackStore.register(callback, forKey: key)
+    }
+
+    private func registerCallback(_ callback: JDBridgeCallBack?,
+                                  forKey key: String,
+                                  timeout: TimeInterval,
+                                  onTimeout: @escaping (JDBridgeCallBack) -> Void) {
+        callbackStore.register(callback, forKey: key, timeout: timeout, onTimeout: onTimeout)
     }
 
     private func callback(forKey key: String) -> JDBridgeCallBack? {
-        callbacks[key]
+        callbackStore.callback(forKey: key)
     }
 
     @discardableResult
     private func takeCallback(forKey key: String) -> JDBridgeCallBack? {
-        let callback = callbacks[key]
-        callbacks.removeValue(forKey: key)
-        return callback
+        callbackStore.take(forKey: key)
     }
 
     private func removeCallback(forKey key: String) {
-        callbacks.removeValue(forKey: key)
+        callbackStore.remove(forKey: key)
     }
 
-    private func removeCallbacks(matchingPrefix prefix: String) {
-        let keys = callbacks.keys.filter { QXBleUtils.getCallbackTypePrefix(from: $0) == prefix }
-        keys.forEach { callbacks.removeValue(forKey: $0) }
-    }
-
+    /// 静默清理指定前缀的回调（不通知 JS）。
     public func clearCallbacks(matchingPrefix prefix: String) {
-        removeCallbacks(matchingPrefix: prefix)
+        callbackStore.takeAll(matchingPrefix: prefix) { _ in }
     }
 
     private func withCallbacks(matchingPrefix prefix: String, _ body: (String, JDBridgeCallBack) -> Void) {
-        callbacks.forEach { key, callback in
-            guard QXBleUtils.getCallbackTypePrefix(from: key) == prefix else { return }
-            body(key, callback)
-        }
+        callbackStore.forEach(matchingPrefix: prefix, body)
     }
 
     private func enqueuePermissionCallback(_ callback: JDBridgeCallBack?) {
@@ -296,24 +280,17 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         }
         
         guard QXBleUtils.isBluetoothPermissionAuthorized() else {
-            callback.onFail(QXBridgeError.noPermission("蓝牙权限被拒绝，请前往设置开启", data: [
-                "isAuthorized": false,
-                "isDenied": true,
-                "isNotDetermined": false
-            ]))
+            callback.onFail(QXBridgeError.bluetoothDenied())
             return
         }
-        
+
         guard state == .poweredOn else {
             callback.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen))
             return
         }
-        
-        registerCallback(callback, forKey: callbackKey)
-        
+
         guard let peripheral = discoveredPeripherals.first(where: { $0.identifier.uuidString == deviceId }) else {
             callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound, customMessage: "未找到指定设备"))
-            removeCallback(forKey: callbackKey)
             return
         }
 
@@ -327,21 +304,26 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
                 message: "设备已连接"
             )
             callback.onSuccess(result)
-            removeCallback(forKey: callbackKey)
             return
+        }
+
+        // 系统不回调时兜底，避免 H5 Promise 永远悬挂。
+        registerCallback(callback, forKey: callbackKey, timeout: Self.connectTimeoutSeconds) { callback in
+            QXBleLogger.log("⏱️ 连接超时：\(deviceId)")
+            callback.onFail(QXBleResult.failure(errorCode: .connectTimeout))
         }
         
         if let currentPeripheral = currentConnectedPeripheral, 
            currentPeripheral.identifier.uuidString != deviceId {
-            print("🔄 检测到已有连接，先断开旧设备：\(currentPeripheral.name ?? "未知")")
+            QXBleLogger.log("🔄 检测到已有连接，先断开旧设备：\(currentPeripheral.name ?? "未知")")
             let oldDeviceId = currentPeripheral.identifier.uuidString
             setDisconnectReason(.replaceConnection, for: oldDeviceId)
             centralManager.cancelPeripheralConnection(currentPeripheral)
             cleanPeripheralConnectionState(deviceId: oldDeviceId)
-            print("✅ 已断开旧设备，准备连接新设备")
+            QXBleLogger.log("✅ 已断开旧设备，准备连接新设备")
         }
         
-        print("📱 当前已连接设备：\(currentConnectedPeripheral?.name ?? "无")")
+        QXBleLogger.log("📱 当前已连接设备：\(currentConnectedPeripheral?.name ?? "无")")
         peripheral.delegate = QXBlePeripheralManager.shared
     
         let connectOptions: [String: Any] = [
@@ -350,7 +332,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             CBConnectPeripheralOptionStartDelayKey: 0
         ]
         
-        print("🔗 开始连接设备：\(peripheral.name ?? "未知") (\(deviceId))")
+        QXBleLogger.log("🔗 开始连接设备：\(peripheral.name ?? "未知") (\(deviceId))")
         centralManager.connect(peripheral, options: connectOptions)
     }
     
@@ -359,7 +341,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         
         currentConnectedPeripheral = peripheral
         currentConnectedDeviceId = deviceId
-        print("✅ 设备已设为当前连接：\(peripheral.name ?? "未知") (\(deviceId))")
+        QXBleLogger.log("✅ 设备已设为当前连接：\(peripheral.name ?? "未知") (\(deviceId))")
     }
     
     public func disconnectPeripheral(deviceId: String, callbackKey: String, callback: JDBridgeCallBack) {
@@ -369,22 +351,22 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         }
         
         registerCallback(callback, forKey: callbackKey)
-        print("🔌 准备断开设备：\(deviceId)")
+        QXBleLogger.log("🔌 准备断开设备：\(deviceId)")
         setDisconnectReason(.appInitiated, for: deviceId)
         cancelReconnection(for: deviceId)
         if let peripheral = currentConnectedPeripheral, peripheral.identifier.uuidString == deviceId {
             if peripheral.state == .connected {
-                print("🔗 设备已连接，发起断开请求：\(peripheral.name ?? "未知")")
+                QXBleLogger.log("🔗 设备已连接，发起断开请求：\(peripheral.name ?? "未知")")
                 centralManager.cancelPeripheralConnection(peripheral)
             } else {
-                print("⚠️ 设备未连接，直接清理状态")
+                QXBleLogger.log("⚠️ 设备未连接，直接清理状态")
                 cleanPeripheralConnectionState(deviceId: deviceId)
                 let result = QXBleResult.success(message: "设备未连接")
                 callback.onSuccess(result)
                 removeCallback(forKey: callbackKey)
             }
         } else {
-            print("❌ 未找到设备：\(deviceId)")
+            QXBleLogger.log("❌ 未找到设备：\(deviceId)")
             callback.onFail(QXBleResult.failure(
                 errorCode: .deviceNotFound,
                 customMessage: "未找到指定设备"
@@ -397,12 +379,12 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         if currentConnectedDeviceId == deviceId {
             currentConnectedPeripheral = nil
             currentConnectedDeviceId = nil
-            print("📱 已清空当前设备")
+            QXBleLogger.log("📱 已清空当前设备")
         }
         
         reconnectionAttempts.removeValue(forKey: deviceId)
         cancelReconnection(for: deviceId)
-        print("✅ 已清理设备连接状态：\(deviceId)")
+        QXBleLogger.log("✅ 已清理设备连接状态：\(deviceId)")
     }
     
     // MARK: - 重连管理
@@ -414,7 +396,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         let deviceId = peripheral.identifier.uuidString
         // 检查是否超过最大重连次数
         guard attempt <= ReconnectionConfig.maxAttempts else {
-            print("❌ 设备重连失败，已达最大重连次数：\(peripheral.name ?? "未知") (\(deviceId))")
+            QXBleLogger.log("❌ 设备重连失败，已达最大重连次数：\(peripheral.name ?? "未知") (\(deviceId))")
             cancelReconnection(for: deviceId)
             // 通知JS端重连失败（使用 onBLEConnectionStateChange 事件）
             let params: [String: Any] = [
@@ -430,14 +412,14 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         }
         // 计算延迟时间（指数退避）
         let delay = ReconnectionConfig.initialDelay * pow(ReconnectionConfig.delayMultiplier, Double(attempt - 1))
-        print("🔄 准备第\(attempt)次重连设备：\(peripheral.name ?? "未知") (\(deviceId))，延迟\(String(format: "%.1f", delay))秒")
+        QXBleLogger.log("🔄 准备第\(attempt)次重连设备：\(peripheral.name ?? "未知") (\(deviceId))，延迟\(String(format: "%.1f", delay))秒")
         // 创建延迟重连任务
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             self.reconnectionTimers.removeValue(forKey: deviceId)
             // 检查蓝牙状态
             guard self.state == .poweredOn else {
-                print("⚠️ 蓝牙未开启，取消重连")
+                QXBleLogger.log("⚠️ 蓝牙未开启，取消重连")
                 self.cancelReconnection(for: deviceId)
                 // 通知JS端重连失败
                 let params: [String: Any] = [
@@ -453,11 +435,11 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             }
             // 检查设备是否已连接（可能在延迟期间已手动连接）
             if peripheral.state == .connected {
-                print("✅ 设备已连接，取消重连任务")
+                QXBleLogger.log("✅ 设备已连接，取消重连任务")
                 self.cancelReconnection(for: deviceId)
                 return
             }
-            print("🔗 开始第\(attempt)次重连：\(peripheral.name ?? "未知")")
+            QXBleLogger.log("🔗 开始第\(attempt)次重连：\(peripheral.name ?? "未知")")
             // 更新重连次数
             self.reconnectionAttempts[deviceId] = attempt
             // 发起重连
@@ -482,7 +464,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     private func cancelReconnection(for deviceId: String) {
         if let timer = reconnectionTimers.removeValue(forKey: deviceId) {
             timer.cancel()
-            print("✅ 已取消设备重连任务：\(deviceId)")
+            QXBleLogger.log("✅ 已取消设备重连任务：\(deviceId)")
         }
         reconnectionAttempts.removeValue(forKey: deviceId)
     }
@@ -490,29 +472,39 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     /// 取消所有正在进行的重连任务
     public func cancelAllReconnections() {
         guard !reconnectionTimers.isEmpty else { return }
-        print("🛑 取消所有重连任务（共\(reconnectionTimers.count)个）")
+        QXBleLogger.log("🛑 取消所有重连任务（共\(reconnectionTimers.count)个）")
         reconnectionTimers.values.forEach { $0.cancel() }
         reconnectionTimers.removeAll()
         reconnectionAttempts.removeAll()
-        print("✅ 已取消所有重连任务")
+        QXBleLogger.log("✅ 已取消所有重连任务")
     }
     
     // MARK: - 蓝牙适配器管理
-    /// 关闭蓝牙适配器，清理所有资源
+    /// 关闭蓝牙适配器，清理所有资源。
+    /// 在清空内存之前，先把 pending 回调统一 fail，避免 H5 Promise 悬挂。
     public func closeBluetoothAdapter() {
         cancelScanTimeout()
         let pendingDisconnectDeviceId = currentConnectedDeviceId
-        
+
         // 停止扫描
         if let centralManager = centralManager, centralManager.isScanning {
             centralManager.stopScan()
         }
-        print("✅ 已取消连接超时任务")
-        
+        QXBleLogger.log("✅ 已取消连接超时任务")
+
         if let deviceId = pendingDisconnectDeviceId {
             setDisconnectReason(.closeAdapter, for: deviceId)
         }
-        
+
+        // 先把所有 pending callback fail 掉，再清空容器。
+        let closeError = QXBleResult.failure(errorCode: .notInit, customMessage: "蓝牙适配器已关闭")
+        callbackStore.takeAll { callback in
+            callback.onFail(closeError)
+        }
+        permissionCallbacks.forEach { $0.onFail(closeError) }
+        permissionCallbacks.removeAll()
+        QXBlePeripheralManager.shared.failAllCallbacks(with: closeError)
+
         // 断开当前连接的设备
         if let manager = centralManager, let peripheral = currentConnectedPeripheral, peripheral.state == .connected {
             manager.cancelPeripheralConnection(peripheral)
@@ -521,20 +513,18 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         currentConnectedDeviceId = nil
         discoveredPeripherals.removeAll()
         deviceRSSICache.removeAll()
-        callbacks.removeAll()
-        permissionCallbacks.removeAll()
-        
+
         reconnectionAttempts.removeAll()
         reconnectionTimers.values.forEach { $0.cancel() }
         reconnectionTimers.removeAll()
         if pendingDisconnectDeviceId == nil {
             disconnectReasons.removeAll()
         }
-        
+
         QXBlePeripheralManager.shared.clearAllCaches()
         state = .unknown
-        
-        print("✅ 蓝牙适配器已关闭，所有资源已清理")
+
+        QXBleLogger.log("✅ 蓝牙适配器已关闭，所有资源已清理")
     }
     
     public func getBluetoothAdapterState() -> [String: Any] {
@@ -647,20 +637,12 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             permissionCallback.onSuccess(QXBleResult.success(message: "蓝牙权限授权成功"))
             return true
         case .denied:
-            permissionCallback.onFail(QXBridgeError.noPermission("蓝牙权限被拒绝，请前往设置开启", data: [
-                "isAuthorized": false,
-                "isDenied": true,
-                "isNotDetermined": false
-            ]))
+            permissionCallback.onFail(QXBridgeError.bluetoothDenied())
             return true
         case .notDetermined:
             return false
         case .restricted:
-            permissionCallback.onFail(QXBridgeError.noPermission("蓝牙权限受限制", data: [
-                "isAuthorized": false,
-                "isDenied": true,
-                "isNotDetermined": false
-            ]))
+            permissionCallback.onFail(QXBridgeError.bluetoothRestricted())
             return true
         @unknown default:
             permissionCallback.onFail(QXBleResult.failure(errorCode: .unknownError))
@@ -668,20 +650,21 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         }
     }
     
-    /// 通知所有缓存回调蓝牙状态变化（内部方法）
+    /// 通知所有缓存回调蓝牙状态变化（内部方法）。
+    /// 蓝牙被关掉 / 权限丢失等异常状态下，把所有 pending 一次性失败返回，
+    /// 避免 H5 Promise 永远悬挂。
     private func notifyAllCallbacksForBluetoothStateChange() {
         guard state != .poweredOn else { return }
-        
+
         let errorMsg = "蓝牙状态异常：\(state.description)"
-        let scanCallbackKeys = callbacks.keys.filter {
-            QXBleUtils.getCallbackTypePrefix(from: $0) == QXBLEventType.onBluetoothDeviceFound.prefix
+        let error = QXBleResult.failure(errorCode: .bluetoothNotOpen, customMessage: errorMsg)
+        callbackStore.takeAll { callback in
+            callback.onFail(error)
         }
-        scanCallbackKeys.forEach { key in
-            takeCallback(forKey: key)?.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen, customMessage: errorMsg))
-        }
-        
+
         cancelScanTimeout()
         centralManager?.stopScan()
+        QXBlePeripheralManager.shared.failAllCallbacks(with: error)
     }
     
     public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
@@ -697,7 +680,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         
         if !isExisted {
             discoveredPeripherals.append(peripheral)
-            // print("发现新设备：\(peripheral.name ?? "未知") (\(deviceId)), RSSI: \(RSSI)")
+            // QXBleLogger.log("发现新设备：\(peripheral.name ?? "未知") (\(deviceId)), RSSI: \(RSSI)")
         }
         
         deviceRSSICache[deviceId] = RSSI
@@ -712,7 +695,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
                 ]
 
                 callback.callJSWithPluginName("QXBlePlugin", params: params) { _, _ in
-                    // print("✅ 设备发现事件已通知JS端：\(peripheral.name ?? "未知")")
+                    // QXBleLogger.log("✅ 设备发现事件已通知JS端：\(peripheral.name ?? "未知")")
                 }
             }
         }
@@ -731,7 +714,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         let attemptCount = reconnectionAttempts[deviceId] ?? 0
         
         if isReconnection {
-            print("✅ 设备重连成功（第\(attemptCount)次尝试）：\(peripheral.name ?? "未知") (\(deviceId))")
+            QXBleLogger.log("✅ 设备重连成功（第\(attemptCount)次尝试）：\(peripheral.name ?? "未知") (\(deviceId))")
             // 通知JS端重连成功（使用 onBLEConnectionStateChange 事件）
             let params: [String: Any] = [
                 "eventName": "onBLEConnectionStateChange",
@@ -746,9 +729,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             reconnectionAttempts.removeValue(forKey: deviceId)
             cancelReconnection(for: deviceId)
         } else {
-            print("✅ 设备连接成功：\(peripheral.name ?? "未知") (\(deviceId))")
+            QXBleLogger.log("✅ 设备连接成功：\(peripheral.name ?? "未知") (\(deviceId))")
         }
-        print("📊 设备连接状态：\(peripheral.state.rawValue) (\(peripheral.state.description))")
+        QXBleLogger.log("📊 设备连接状态：\(peripheral.state.rawValue) (\(peripheral.state.description))")
         
         // 立即更新连接状态（确保后续操作能找到设备）
         updateCurrentConnectedPeripheral(peripheral)
@@ -768,18 +751,18 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         
         // 检查是否为重连失败
         if let currentAttempt = reconnectionAttempts[deviceId] {
-            print("❌ 设备重连失败（第\(currentAttempt)次尝试）：\(peripheral.name ?? "未知") (\(deviceId))")
+            QXBleLogger.log("❌ 设备重连失败（第\(currentAttempt)次尝试）：\(peripheral.name ?? "未知") (\(deviceId))")
             if let error = error {
-                print("❌ 失败原因：\(error.localizedDescription)")
+                QXBleLogger.log("❌ 失败原因：\(error.localizedDescription)")
             }
             // 继续尝试下一次重连
             attemptReconnection(peripheral: peripheral, attempt: currentAttempt + 1)
         } else {
-            print("❌ 设备连接失败：\(peripheral.name ?? "未知") (\(deviceId))")
+            QXBleLogger.log("❌ 设备连接失败：\(peripheral.name ?? "未知") (\(deviceId))")
             if let error = error {
-                print("❌ 失败原因：\(error.localizedDescription)")
+                QXBleLogger.log("❌ 失败原因：\(error.localizedDescription)")
             }
-            print("✅ 已取消连接超时任务")
+            QXBleLogger.log("✅ 已取消连接超时任务")
             // 查找并触发连接失败回调
             triggerConnectionCallback(deviceId: deviceId, isSuccess: false, error: error)
         }
@@ -865,22 +848,25 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         // 只要不是 App 主动发起的断开，都视为异常断开，避免设备端主动断开但 error 为空时被误判为正常。
         let isUnexpectedDisconnect = !wasIntentionalDisconnect
         if let error = error {
-            print("⚠️ 设备异常断开：\(peripheral.name ?? "未知") (\(deviceId)) \(error.localizedDescription)")
+            QXBleLogger.log("⚠️ 设备异常断开：\(peripheral.name ?? "未知") (\(deviceId)) \(error.localizedDescription)")
             
         } else {
             let disconnectType = isUnexpectedDisconnect ? "异常断开" : "正常断开"
-            print("🔌 设备\(disconnectType)：\(peripheral.name ?? "未知") (\(deviceId))")
+            QXBleLogger.log("🔌 设备\(disconnectType)：\(peripheral.name ?? "未知") (\(deviceId))")
         }
         // 清理连接状态（但不清理重连状态，如果需要重连的话）
         if currentConnectedDeviceId == deviceId {
             currentConnectedPeripheral = nil
             currentConnectedDeviceId = nil
-            print("📱 已清空当前设备")
+            QXBleLogger.log("📱 已清空当前设备")
         }
         // 主动断开时补齐 native closeBLEConnection 成功回调
         if wasIntentionalDisconnect {
             triggerDisconnectCallback(deviceId: deviceId, isSuccess: true, peripheral: peripheral)
         }
+        // 断开后，外设侧 pending 的 discover/write/notify 不会再回调，统一 fail。
+        let disconnectError = QXBleResult.failure(errorCode: .noConnection)
+        QXBlePeripheralManager.shared.failCallbacks(for: deviceId, with: disconnectError)
         // 通知JS端连接状态变化
         let params: [String: Any] = [
             "eventName": "onBLEConnectionStateChange",
@@ -894,7 +880,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         callJSWithPluginName("QXBlePlugin", params: params) { _, _ in }
         // 异常断开时尝试自动重连
         if isUnexpectedDisconnect {
-            print("🔄 检测到异常断开，准备自动重连...")
+            QXBleLogger.log("🔄 检测到异常断开，准备自动重连...")
             // 初始化重连计数
             reconnectionAttempts[deviceId] = 0
             // 开始第一次重连尝试

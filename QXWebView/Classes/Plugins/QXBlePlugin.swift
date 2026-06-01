@@ -150,23 +150,14 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             QXBleCentralManager.shared.setupCentralManager(permissionCallback: callback)
             return
         }
-        
+
         if QXBleUtils.isBluetoothPermissionDenied() {
-            callback.onFail(bluetoothPermissionError("蓝牙权限被拒绝，请前往设置开启", data: [
-                "isAuthorized": false,
-                "isDenied": true,
-                "isNotDetermined": false
-            ]))
+            callback.onFail(QXBridgeError.bluetoothDenied(domain: errorDomain))
             return
         }
-        
+
         // 首次未授权时先初始化 CBCentralManager，交给系统触发蓝牙权限弹窗。
         QXBleCentralManager.shared.setupCentralManager(permissionCallback: callback)
-    }
-
-    private func bluetoothPermissionError(_ message: String, data: [String: Any] = [:]) -> NSError {
-        print("bluetoothPermissionError", message)
-        return QXBridgeError.noPermission(message, domain: errorDomain, data: data)
     }
     
     // MARK: - 设备扫描
@@ -180,20 +171,12 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         }
         
         if QXBleUtils.isBluetoothPermissionNotDetermined() {
-            callback.onFail(bluetoothPermissionError("蓝牙权限未授权，请先授权", data: [
-                "isAuthorized": false,
-                "isDenied": false,
-                "isNotDetermined": true
-            ]))
+            callback.onFail(QXBridgeError.bluetoothNotDetermined(domain: errorDomain))
             return
         }
-        
+
         guard QXBleUtils.isBluetoothPermissionAuthorized() else {
-            callback.onFail(bluetoothPermissionError("蓝牙权限被拒绝，请前往设置开启", data: [
-                "isAuthorized": false,
-                "isDenied": true,
-                "isNotDetermined": false
-            ]))
+            callback.onFail(QXBridgeError.bluetoothDenied(domain: errorDomain))
             return
         }
         
@@ -248,10 +231,10 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         centralManager.cancelAllReconnections()
         
         if manager.isScanning {
-            print("🛑 检测到正在扫描，先停止扫描再连接设备")
+            QXBleLogger.log("🛑 检测到正在扫描，先停止扫描再连接设备")
             manager.stopScan()
             centralManager.clearCallbacks(matchingPrefix: QXBLEventType.onBluetoothDeviceFound.prefix)
-            print("✅ 已停止扫描，准备连接设备")
+            QXBleLogger.log("✅ 已停止扫描，准备连接设备")
         }
         
         let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBLEventType.connectBluetoothDevice.rawValue, deviceId: deviceId)
@@ -318,18 +301,18 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             ))
             return
         }
-        print("🔍 检查设备连接状态，deviceId: \(deviceId)")
-        print("🔍 当前连接设备：\(QXBleCentralManager.shared.currentConnectedPeripheral?.name ?? "无")")
+        QXBleLogger.log("🔍 检查设备连接状态，deviceId: \(deviceId)")
+        QXBleLogger.log("🔍 当前连接设备：\(QXBleCentralManager.shared.currentConnectedPeripheral?.name ?? "无")")
         guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
               peripheral.identifier.uuidString == deviceId else {
-            print("❌ 设备未连接或未找到：\(deviceId)")
+            QXBleLogger.log("❌ 设备未连接或未找到：\(deviceId)")
             callback.onFail(QXBleResult.failure(
                 errorCode: .deviceNotFound,
                 customMessage: "设备未连接，请先连接设备"
             ))
             return
         }
-        print("✅ 找到已连接设备：\(peripheral.name ?? "未知设备")")
+        QXBleLogger.log("✅ 找到已连接设备：\(peripheral.name ?? "未知设备")")
         
         QXBlePeripheralManager.shared.writeValue(
             deviceId: deviceId,
@@ -358,7 +341,7 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         
         guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
               peripheral.identifier.uuidString == deviceId else {
-            print("❌ 获取服务失败：设备未连接 (\(deviceId))")
+            QXBleLogger.log("❌ 获取服务失败：设备未连接 (\(deviceId))")
             callback.onFail(QXBleResult.failure(
                 errorCode: .deviceNotFound,
                 customMessage: "设备未连接，请先连接设备"
@@ -366,12 +349,12 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        print("🔍 开始获取设备服务：\(peripheral.name ?? "未知") (\(deviceId))")
+        QXBleLogger.log("🔍 开始获取设备服务：\(peripheral.name ?? "未知") (\(deviceId))")
         
-        // 生成服务发现回调Key并注册
+        // 生成服务发现回调Key并注册（含超时兜底）
         let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.getBLEDeviceServices.prefix, deviceId: deviceId)
-        QXBlePeripheralManager.shared.registerCallback(callback, forKey: callbackKey)
-        
+        QXBlePeripheralManager.shared.registerDiscoverCallback(callback, forKey: callbackKey, timeoutMessage: "发现服务超时")
+
         // 主动发现设备所有服务（nil表示发现所有服务）
         peripheral.discoverServices(nil)
     }
@@ -412,13 +395,13 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        // 生成服务粒度特征发现回调Key并注册，避免等待其它服务的特征发现结果。
+        // 生成服务粒度特征发现回调Key并注册（含超时兜底），避免等待其它服务的特征发现结果。
         let callbackKey = QXBleUtils.generateCallbackKey(
             prefix: QXBleCallbackType.discoverCharacteristics.prefix,
             deviceId: deviceId,
             serviceId: serviceCBUUID.uuidString
         )
-        QXBlePeripheralManager.shared.registerCallback(callback, forKey: callbackKey)
+        QXBlePeripheralManager.shared.registerDiscoverCallback(callback, forKey: callbackKey, timeoutMessage: "发现特征超时")
         
         // 检查服务是否已缓存
         if let services = QXBlePeripheralManager.shared.servicesCache[deviceId],

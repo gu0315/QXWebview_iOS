@@ -14,8 +14,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
     // "https://test-fr-home-charge-web.cheryge.com/#/pages/bluetooth-test/index"
-    private let homeChargingUrl = "http://172.20.10.4:5173/#/pages/bluetooth-test/index"
+    // private let homeChargingUrl = "http://169.254.142.113:5173/#/pages/bluetooth-test/index"
     //"https://test-fr-home-charge-web.cheryge.com/#/pages/bluetooth-test/index"
+    private let homeChargingUrl = "http://172.20.10.4:5173/#/pages/bluetooth-test/index"
     private let networkMonitor = NWPathMonitor()
     private let networkMonitorQueue = DispatchQueue(label: "com.chery.app.network-monitor")
     private var lastNetworkStatus: NWPath.Status?

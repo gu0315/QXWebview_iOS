@@ -183,20 +183,20 @@ public class QXBleUtils {
     /// 打开应用设置页面（用于用户手动授权蓝牙权限）
     public static func openAppSettings() {
         guard let settingsUrl = URL(string: UIApplication.openSettingsURLString) else {
-            print("无法打开设置页面：URL无效")
+            QXBleLogger.log("无法打开设置页面：URL无效")
             return
         }
         
         if UIApplication.shared.canOpenURL(settingsUrl) {
             UIApplication.shared.open(settingsUrl, options: [:]) { success in
                 if success {
-                    print("已成功打开应用设置页面")
+                    QXBleLogger.log("已成功打开应用设置页面")
                 } else {
-                    print("打开应用设置页面失败")
+                    QXBleLogger.log("打开应用设置页面失败")
                 }
             }
         } else {
-            print("无法打开设置页面：系统不支持")
+            QXBleLogger.log("无法打开设置页面：系统不支持")
         }
     }
     
@@ -225,7 +225,7 @@ public class QXBleUtils {
     /// - Returns: 转换后的Data，失败返回nil
     public static func convertToData(value: Any?, type: DataType) -> Data? {
         guard let value = value else {
-            print("❌ 数据为空")
+            QXBleLogger.log("❌ 数据为空")
             return nil
         }
         
@@ -247,12 +247,12 @@ public class QXBleUtils {
     /// 解析Base64格式数据
     private static func parseBase64(_ value: Any) -> Data? {
         guard let valueStr = value as? String, !valueStr.isEmpty else {
-            print("❌ Base64数据为空")
+            QXBleLogger.log("❌ Base64数据为空")
             return nil
         }
         
         guard let data = Data(base64Encoded: valueStr) else {
-            print("❌ Base64数据解析失败：\(valueStr)")
+            QXBleLogger.log("❌ Base64数据解析失败：\(valueStr)")
             return nil
         }
         
@@ -280,7 +280,7 @@ public class QXBleUtils {
         
         // 空数组/解析失败校验
         guard !intArray.isEmpty else {
-            print("❌ BUFFER数据解析后为空/类型不支持：\(type(of: value))")
+            QXBleLogger.log("❌ BUFFER数据解析后为空/类型不支持：\(type(of: value))")
             return nil
         }
         
@@ -288,7 +288,7 @@ public class QXBleUtils {
         var bufferData = Data(capacity: intArray.count)
         for (index, intVal) in intArray.enumerated() {
             guard intVal >= 0 && intVal <= 255 else {
-                print("❌ BUFFER第\(index)位值\(intVal)超出Uint8范围(0-255)")
+                QXBleLogger.log("❌ BUFFER第\(index)位值\(intVal)超出Uint8范围(0-255)")
                 return nil
             }
             bufferData.append(UInt8(intVal))
@@ -300,14 +300,14 @@ public class QXBleUtils {
     /// 解析16进制格式数据（兼容空格、大小写）
     private static func parseHex(_ value: Any) -> Data? {
         guard let valueStr = value as? String, !valueStr.isEmpty else {
-            print("❌ 16进制数据为空")
+            QXBleLogger.log("❌ 16进制数据为空")
             return nil
         }
         
         let cleanedHex = valueStr.replacingOccurrences(of: " ", with: "").uppercased()
         
         guard cleanedHex.count % 2 == 0 else {
-            print("❌ 16进制数据长度不合法（非偶数）：\(valueStr)")
+            QXBleLogger.log("❌ 16进制数据长度不合法（非偶数）：\(valueStr)")
             return nil
         }
         
@@ -318,7 +318,7 @@ public class QXBleUtils {
             let start = cleanedHex.index(cleanedHex.startIndex, offsetBy: i * 2)
             let end = cleanedHex.index(start, offsetBy: 2)
             guard let byte = UInt8(cleanedHex[start..<end], radix: 16) else {
-                print("❌ 16进制解析失败：\(cleanedHex[start..<end])")
+                QXBleLogger.log("❌ 16进制解析失败：\(cleanedHex[start..<end])")
                 return nil
             }
             hexData.append(byte)
@@ -330,15 +330,156 @@ public class QXBleUtils {
     /// 解析UTF8/文本格式数据
     private static func parseUTF8(_ value: Any) -> Data? {
         guard let valueStr = value as? String, !valueStr.isEmpty else {
-            print("❌ UTF8数据为空")
+            QXBleLogger.log("❌ UTF8数据为空")
             return nil
         }
         
         guard let data = valueStr.data(using: .utf8) else {
-            print("❌ UTF8数据解析失败：\(valueStr)")
+            QXBleLogger.log("❌ UTF8数据解析失败：\(valueStr)")
             return nil
         }
-        
+
         return data
     }
+}
+
+// MARK: - 回调容器
+/// 统一封装蓝牙模块的回调容器：注册、查找、取出、按前缀批量处理，
+/// 并提供可选的超时兜底，避免 CoreBluetooth 不回调时 JS 端 Promise 永远悬挂。
+///
+/// 说明：所有调用都在 CBCentralManager 注册时指定的队列上（目前是 main 队列），
+/// 因此内部不做线程同步，调用方保证单线程访问。
+public final class QXBleCallbackStore {
+    private var callbacks: [String: JDBridgeCallBack] = [:]
+    private var timeoutItems: [String: DispatchWorkItem] = [:]
+
+    public init() {}
+
+    public var isEmpty: Bool { callbacks.isEmpty }
+
+    /// 注册回调；nil 会被忽略。覆盖旧 key 时会同时取消旧的超时。
+    public func register(_ callback: JDBridgeCallBack?, forKey key: String) {
+        guard let callback else { return }
+        cancelTimeout(forKey: key)
+        callbacks[key] = callback
+    }
+
+    /// 注册回调并附带超时兜底。
+    /// - Parameters:
+    ///   - timeout: <=0 表示不设超时。
+    ///   - onTimeout: 超时时回调，参数是已经从字典移除的 callback。
+    public func register(_ callback: JDBridgeCallBack?,
+                         forKey key: String,
+                         timeout: TimeInterval,
+                         onTimeout: @escaping (JDBridgeCallBack) -> Void) {
+        register(callback, forKey: key)
+        guard callbacks[key] != nil, timeout > 0 else { return }
+        armTimeout(forKey: key, after: timeout, onTimeout: onTimeout)
+    }
+
+    public func callback(forKey key: String) -> JDBridgeCallBack? {
+        callbacks[key]
+    }
+
+    public func contains(_ key: String) -> Bool {
+        callbacks[key] != nil
+    }
+
+    /// 拿到所有 key 的快照（数组），避免外部直接迭代字典时遭遇并发修改。
+    public func keysSnapshot() -> [String] {
+        Array(callbacks.keys)
+    }
+
+    /// 取出回调并从容器中移除，同时取消超时。
+    @discardableResult
+    public func take(forKey key: String) -> JDBridgeCallBack? {
+        cancelTimeout(forKey: key)
+        return callbacks.removeValue(forKey: key)
+    }
+
+    /// 仅移除，不触发回调。
+    public func remove(forKey key: String) {
+        cancelTimeout(forKey: key)
+        callbacks.removeValue(forKey: key)
+    }
+
+    /// 仅遍历，不移除（适合"通知所有人"场景，由调用方决定是否 take）。
+    public func forEach(matchingPrefix prefix: String, _ body: (String, JDBridgeCallBack) -> Void) {
+        callbacks.forEach { key, callback in
+            guard QXBleUtils.getCallbackTypePrefix(from: key) == prefix else { return }
+            body(key, callback)
+        }
+    }
+
+    /// 把命中前缀的回调全部取出并交给调用方处理。
+    public func takeAll(matchingPrefix prefix: String, _ body: (JDBridgeCallBack) -> Void) {
+        takeAll(matching: { QXBleUtils.getCallbackTypePrefix(from: $0) == prefix }, body)
+    }
+
+    /// 自定义条件批量取出。
+    public func takeAll(matching predicate: (String) -> Bool, _ body: (JDBridgeCallBack) -> Void) {
+        let matchedKeys = callbacks.keys.filter(predicate)
+        matchedKeys.forEach { key in
+            guard let callback = take(forKey: key) else { return }
+            body(callback)
+        }
+    }
+
+    /// 一次性取出全部回调（清空容器），常用于关闭适配器时统一 fail。
+    public func takeAll(_ body: (JDBridgeCallBack) -> Void) {
+        let snapshot = Array(callbacks.values)
+        timeoutItems.values.forEach { $0.cancel() }
+        timeoutItems.removeAll()
+        callbacks.removeAll()
+        snapshot.forEach(body)
+    }
+
+    /// 直接清空，不触发任何回调（极少用，仅在确定无需通知时使用）。
+    public func removeAllSilently() {
+        timeoutItems.values.forEach { $0.cancel() }
+        timeoutItems.removeAll()
+        callbacks.removeAll()
+    }
+
+    // MARK: - Private
+
+    private func armTimeout(forKey key: String,
+                            after delay: TimeInterval,
+                            onTimeout: @escaping (JDBridgeCallBack) -> Void) {
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            // 取出回调（会自动 cancelTimeout，但此时 workItem 已经在执行）
+            guard let callback = self.callbacks.removeValue(forKey: key) else { return }
+            self.timeoutItems.removeValue(forKey: key)
+            onTimeout(callback)
+        }
+        timeoutItems[key] = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func cancelTimeout(forKey key: String) {
+        timeoutItems.removeValue(forKey: key)?.cancel()
+    }
+}
+
+// MARK: - 蓝牙日志
+/// 蓝牙模块统一日志入口。Release 包下编译为空实现，
+/// 既保留 Debug 时排查问题的便利，又避免生产环境刷屏。
+public enum QXBleLogger {
+    #if DEBUG
+    @inline(__always)
+    public static func log(_ items: Any...,
+                           file: String = #fileID,
+                           line: Int = #line) {
+        let message = items.map { "\($0)" }.joined(separator: " ")
+        Swift.print(message)
+    }
+    #else
+    @inline(__always)
+    public static func log(_ items: Any...,
+                           file: String = #fileID,
+                           line: Int = #line) {
+        // Release 构建：空实现，调用点被优化掉
+    }
+    #endif
 }
