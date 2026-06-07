@@ -13,10 +13,11 @@ import QXWebView
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
+    // 18352537909
     // "https://test-fr-home-charge-web.cheryge.com/#/pages/bluetooth-test/index"
     // private let homeChargingUrl = "http://169.254.142.113:5173/#/pages/bluetooth-test/index"
     //"https://test-fr-home-charge-web.cheryge.com/#/pages/bluetooth-test/index"
-    private let homeChargingUrl = "http://172.20.10.4:5173/#/pages/bluetooth-test/index"
+    private let homeChargingUrl = "http://172.20.10.4:5173/#/"
     private let networkMonitor = NWPathMonitor()
     private let networkMonitorQueue = DispatchQueue(label: "com.chery.app.network-monitor")
     private var lastNetworkStatus: NWPath.Status?
@@ -55,8 +56,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     /// 设置根视图控制器
     private func setupRootViewController() {
-        let rootViewController = QXWebViewController(url: homeChargingUrl)
-        rootViewController.hostDelegate = self
+        // 主界面：用户输入手机号、车辆 VIN / MAC，再进入 H5
+        let rootViewController = ViewController()
         // 创建导航控制器
         let navigationController = UINavigationController(rootViewController: rootViewController)
         navigationController.navigationBar.isTranslucent = false
@@ -128,7 +129,7 @@ extension AppDelegate: QXWebViewHostDelegate {
             ])
         case "app://login":
             let result: [String: Any] = [
-                "phone": "15755336837",
+                "phone": "18352537909",
                 "list": [
                     ["vin": "vin1", "mac": "mac1"],
                     ["vin": "vin2", "mac": "mac2"],
@@ -159,7 +160,7 @@ extension AppDelegate: QXWebViewHostDelegate {
             completion(["token": "xxx"])
         case "getUserInfo":
             let result: [String: Any] = [
-                "phone": "15755336837",
+                "phone": "18352537909",
                 "list": [
                     ["vin": "vin1", "mac": "mac1"],
                     ["vin": "vin2", "mac": "mac2"],
