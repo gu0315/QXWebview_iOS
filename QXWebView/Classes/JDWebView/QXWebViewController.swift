@@ -34,7 +34,10 @@ public class QXWebViewController: UIViewController {
     private var navigationBarStyleOverride: UIBarStyle?
     
     @objc public weak var hostDelegate: QXWebViewHostDelegate?
-    
+
+    /// 由 openWebViewForResult 打开时分配的回传 id（用于 closeWithResult / 取消兜底）
+    var hostPageId: String?
+
     private var previewFileURL: URL!
 
     // MARK: - 布局控制属性
@@ -97,6 +100,14 @@ public class QXWebViewController: UIViewController {
     
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+    }
+
+    public override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        // 被 pop 出栈 / 被 dismiss（用户返回，未调用 closeWithResult）=> 回传取消兜底
+        if isMovingFromParent || isBeingDismissed, let pageId = hostPageId {
+            QXPageResultCenter.shared.cancel(pageId)
+        }
     }
     
     public override func viewDidLayoutSubviews() {

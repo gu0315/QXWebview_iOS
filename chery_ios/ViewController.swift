@@ -336,32 +336,20 @@ final class VehicleRowView: UIView {
 }
 
 // MARK: - 桥接：把用户输入的数据返回给 H5
+// 说明：A 打开 B、B 回传值的能力已下沉到 SDK（QXBasePlugin 的
+// openWebViewForResult / closeWithResult），宿主无需再处理，这里只负责用户信息。
 extension ViewController: QXWebViewHostDelegate {
 
-    func webViewRequestOpenPage(
-        url: String,
-        params: [String: Any]?,
-        completion: @escaping (Any?) -> Void
-    ) {
+    func webViewRequestOpenPage(url: String, params: [String: Any]?, completion: @escaping (Any?) -> Void) {
         let safeParams = params ?? [:]
         switch url {
         case "app://pay":
-            // 拉起支付功能（需宿主实现）
-            completion([
-                "success": true,
-                "action": "pay",
-                "params": safeParams
-            ])
+            completion(["success": true, "action": "pay", "params": safeParams])
         case "app://login":
-            // 返回用户在主界面输入的信息
             completion(UserSession.shared.userInfoPayload())
         default:
             print("未处理的 URL: \(url)")
-            completion([
-                "success": false,
-                "message": "未处理的 URL: \(url)",
-                "params": safeParams
-            ])
+            completion(["success": false, "message": "未处理的 URL: \(url)", "params": safeParams])
         }
     }
 
@@ -370,7 +358,6 @@ extension ViewController: QXWebViewHostDelegate {
         case "getToken":
             completion(["token": "xxx"])
         case "getUserInfo":
-            // 返回用户在主界面输入的信息
             completion(UserSession.shared.userInfoPayload())
         default:
             completion(["success": false, "message": "未知的方法: \(methodName)"])

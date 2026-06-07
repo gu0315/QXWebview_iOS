@@ -41,6 +41,9 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         case "openWebView":
             handleOpenWebView(params: params, callback: callback)
             return true
+        case "closeWithResult":
+            handleCloseWithResult(params: params, callback: callback)
+            return true
         case "openUrl":
             handleOpenUrl(params: params, callback: callback)
             return true
@@ -348,9 +351,13 @@ public class QXBasePlugin: JDBridgeBasePlugin {
     ///   url: "https://xxx.com/page",
     ///   query: { id: 1, from: "h5" },   // 可选 会自动拼到 url 的 query 上
     ///   navHidden: true,                  // 可选 是否隐藏导航栏
-    ///   immersive: true,                  // 可选 是否沉浸式状态栏
-    ///   presentStyle: "push"              // 可选 push / present，默认 push
+    ///   immersive: true,                   // 可选 是否沉浸式状态栏
+    ///   presentStyle: "push"           // 可选 push / present，默认 push
+    ///   forResult: true                      // 可选 需要等待新页面回传时传 true，并用 await 接收
     /// })
+    /// 等待回传示例:
+    /// const result = await QXBasePlugin.openWebView({ url: "https://xxx/#/pages/b/index", forResult: true })
+    /// // result 为新页面通过 closeWithResult 回传的数据；用户直接返回时为 { cancelled: true }
     private func handleOpenWebView(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
         guard let callback = callback else { return }
         guard let params = params,
@@ -366,6 +373,9 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         let immersive = (params["immersive"] as? Bool)
             ?? (params["immersive"] as? NSNumber)?.boolValue
         let presentStyle = (params["presentStyle"] as? String)?.lowercased() ?? "push"
+        // forResult=true 时挂起本次 callback，等待新页面 closeWithResult 或被返回时回传
+        let forResult = (params["forResult"] as? Bool)
+            ?? (params["forResult"] as? NSNumber)?.boolValue ?? false
 
         DispatchQueue.main.async {
             guard let topVC = UIApplication.shared.topViewController else {
@@ -375,6 +385,12 @@ public class QXBasePlugin: JDBridgeBasePlugin {
             let webVC = QXWebViewController(url: finalUrl)
             if let navHidden = navHidden { webVC.isNavigationBarHidden = navHidden }
             if let immersive = immersive { webVC.isImmersiveStatusBar = immersive }
+
+            if forResult {
+                let pageId = UUID().uuidString
+                webVC.hostPageId = pageId
+                QXPageResultCenter.shared.suspend(pageId, callback: callback)
+            }
 
             if presentStyle == "present" {
                 let wrapper = UINavigationController(rootViewController: webVC)
@@ -392,11 +408,41 @@ public class QXBasePlugin: JDBridgeBasePlugin {
                 wrapper.navigationBar.isHidden = webVC.isNavigationBarHidden
                 topVC.present(wrapper, animated: true)
             }
-            callback.onSuccess([
-                "code": 0,
-                "msg": "打开 WebView 成功",
-                "url": finalUrl
-            ])
+
+            // forResult 时不立即回调，等待新页面回传
+            if !forResult {
+                callback.onSuccess([
+                    "code": 0,
+                    "msg": "打开 WebView 成功",
+                    "url": finalUrl
+                ])
+            }
+        }
+    }
+
+    // MARK: - 回传数据并关闭当前 WebView
+    /// H5 调用示例（在 B 页面）:
+    /// await QXBasePlugin.closeWithResult({ data: { vin: "xxx", mac: "yyy" } })
+    private func handleCloseWithResult(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
+        let data: Any = params?["data"] ?? params ?? [:]
+        DispatchQueue.main.async {
+            guard let webVC = callback.findWebViewController() else {
+                callback.onFail(QXBridgeError.notFound("未找到WebViewController", domain: self.errorDomain))
+                return
+            }
+            // 回传给打开方
+            if let pageId = webVC.hostPageId {
+                QXPageResultCenter.shared.resolve(pageId, data: data)
+                webVC.hostPageId = nil // 标记已消费，避免返回兜底重复回传
+            }
+            // 关闭当前页：优先 pop，无导航栈则 dismiss
+            if let nav = webVC.navigationController, nav.viewControllers.count > 1 {
+                nav.popViewController(animated: true)
+            } else {
+                webVC.dismiss(animated: true, completion: nil)
+            }
+            callback.onSuccess(["success": true]) // 给 B 本次调用的 ack
         }
     }
 
@@ -493,6 +539,32 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         }
         components.queryItems = items
         return components.url?.absoluteString ?? urlString
+    }
+}
+
+// MARK: - 跨 WebView 回传：挂起回调中心（SDK 内部）
+/// openWebViewForResult 打开新页面时把 callback 挂起，B 调 closeWithResult（或被返回）时回传。
+/// 用字典以 pageId 索引，支持 A→B→C 多层嵌套互不串扰。所有访问都在主线程。
+final class QXPageResultCenter {
+    static let shared = QXPageResultCenter()
+    private init() {}
+
+    private var callbacks: [String: JDBridgeCallBack] = [:]
+
+    func suspend(_ id: String, callback: JDBridgeCallBack) {
+        callbacks[id] = callback
+    }
+
+    /// B 主动回传
+    func resolve(_ id: String, data: Any) {
+        guard let callback = callbacks.removeValue(forKey: id) else { return }
+        callback.onSuccess(data)
+    }
+
+    /// 被返回（未回传）的取消兜底
+    func cancel(_ id: String) {
+        guard let callback = callbacks.removeValue(forKey: id) else { return }
+        callback.onSuccess(["cancelled": true])
     }
 }
 
