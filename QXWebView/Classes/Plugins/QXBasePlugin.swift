@@ -13,6 +13,8 @@ import CoreLocation
 public class QXBasePlugin: JDBridgeBasePlugin {
     // 统一错误域（极简，仅标识来源）
     private let errorDomain = "QXBasePlugin"
+    // 选图 picker 的 delegate 强引用（UIImagePickerController.delegate 为 weak，需保活到回调结束）
+    private var imagePickerDelegate: ImagePickerResultDelegate?
     /// 执行JS调用
     @objc public override func excute(_ action: String, params: [AnyHashable : Any], callback: JDBridgeCallBack) -> Bool {
         print("QXBasePlugin-excute-action:\(action)")
@@ -46,6 +48,9 @@ public class QXBasePlugin: JDBridgeBasePlugin {
             return true
         case "openUrl":
             handleOpenUrl(params: params, callback: callback)
+            return true
+        case "chooseImage":
+            handleChooseImage(params: params, callback: callback)
             return true
         default:
             callback.onFail(NSError(domain: "DeviceInfoPlugin", code: 1001, userInfo: [NSLocalizedDescriptionKey: "未知操作"]))
@@ -539,6 +544,131 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         }
         components.queryItems = items
         return components.url?.absoluteString ?? urlString
+    }
+}
+
+// MARK: - 选择图片（相册 / 拍照）
+extension QXBasePlugin {
+    /// H5 调用示例:
+    /// const res = await QXBasePlugin.chooseImage({ sourceType: ["album","camera"], maxSize: 1280 })
+    /// // res = { count, images: [{ base64, path, width, height, size }] }
+    /// // base64 形如 "data:image/jpeg;base64,..."；path 为本地 file:// 路径
+    /// // 用户取消时走 error 回调（code = cancelled）
+    fileprivate func handleChooseImage(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
+        let sources = ((params?["sourceType"] as? [String])?.map { $0.lowercased() }) ?? ["album", "camera"]
+        let allowAlbum = sources.contains("album")
+        let allowCamera = sources.contains("camera")
+        let maxSize = (params?["maxSize"] as? NSNumber)?.intValue ?? 1280
+        let quality = (params?["quality"] as? NSNumber)?.doubleValue ?? 0.8
+
+        DispatchQueue.main.async {
+            guard let topVC = UIApplication.shared.topViewController else {
+                callback.onFail(QXBridgeError.notFound("未找到顶层视图控制器", domain: self.errorDomain))
+                return
+            }
+
+            let present: (UIImagePickerController.SourceType) -> Void = { [weak self] source in
+                guard let self = self else { return }
+                guard UIImagePickerController.isSourceTypeAvailable(source) else {
+                    callback.onFail(QXBridgeError.make(.unsupported, message: "设备不支持该来源", domain: self.errorDomain))
+                    return
+                }
+                let picker = UIImagePickerController()
+                picker.sourceType = source
+                picker.allowsEditing = true // 头像场景便于裁剪
+                let delegate = ImagePickerResultDelegate(callback: callback, maxSize: maxSize, quality: quality) { [weak self] in
+                    self?.imagePickerDelegate = nil
+                }
+                self.imagePickerDelegate = delegate
+                picker.delegate = delegate
+                topVC.present(picker, animated: true)
+            }
+
+            if allowAlbum && allowCamera {
+                let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+                sheet.addAction(UIAlertAction(title: "拍照", style: .default) { _ in present(.camera) })
+                sheet.addAction(UIAlertAction(title: "从相册选择", style: .default) { _ in present(.photoLibrary) })
+                sheet.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in
+                    callback.onFail(QXBridgeError.make(.cancelled, message: "用户取消", domain: self.errorDomain))
+                })
+                if let pop = sheet.popoverPresentationController {
+                    pop.sourceView = topVC.view
+                    pop.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.maxY - 1, width: 1, height: 1)
+                    pop.permittedArrowDirections = []
+                }
+                topVC.present(sheet, animated: true)
+            } else if allowCamera {
+                present(.camera)
+            } else {
+                present(.photoLibrary)
+            }
+        }
+    }
+}
+
+// MARK: - 选图结果处理（压缩 + base64 + 本地路径）
+final class ImagePickerResultDelegate: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    private let callback: JDBridgeCallBack
+    private let maxSize: Int
+    private let quality: Double
+    private let onFinish: () -> Void
+    private let errorDomain = "QXBasePlugin"
+
+    init(callback: JDBridgeCallBack, maxSize: Int, quality: Double, onFinish: @escaping () -> Void) {
+        self.callback = callback
+        self.maxSize = maxSize
+        self.quality = quality
+        self.onFinish = onFinish
+    }
+
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage)
+        picker.dismiss(animated: true)
+        defer { onFinish() }
+
+        guard let original = image else {
+            callback.onFail(QXBridgeError.make(.failure, message: "未获取到图片", domain: errorDomain))
+            return
+        }
+        let resized = Self.resize(original, maxSize: maxSize)
+        guard let data = resized.jpegData(compressionQuality: CGFloat(quality)) else {
+            callback.onFail(QXBridgeError.make(.failure, message: "图片压缩失败", domain: errorDomain))
+            return
+        }
+        let base64 = "data:image/jpeg;base64," + data.base64EncodedString()
+        var path = ""
+        let fileURL = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("img_\(UUID().uuidString).jpg")
+        if (try? data.write(to: fileURL)) != nil {
+            path = fileURL.absoluteString // file://...
+        }
+        let item: [String: Any] = [
+            "base64": base64,
+            "path": path,
+            "width": Int(resized.size.width),
+            "height": Int(resized.size.height),
+            "size": data.count
+        ]
+        callback.onSuccess(["count": 1, "images": [item]])
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+        callback.onFail(QXBridgeError.make(.cancelled, message: "用户取消", domain: errorDomain))
+        onFinish()
+    }
+
+    /// 等比缩放到最长边不超过 maxSize
+    static func resize(_ image: UIImage, maxSize: Int) -> UIImage {
+        let maxDim = CGFloat(maxSize)
+        let w = image.size.width, h = image.size.height
+        let longSide = max(w, h)
+        guard maxDim > 0, longSide > maxDim else { return image }
+        let scale = maxDim / longSide
+        let newSize = CGSize(width: floor(w * scale), height: floor(h * scale))
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
     }
 }
 
