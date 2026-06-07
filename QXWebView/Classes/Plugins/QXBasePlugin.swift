@@ -306,7 +306,7 @@ public class QXBasePlugin: JDBridgeBasePlugin {
                 "code": 0,
                 "msg": "navigationBar.barStyle 设置成功",
                 "style": self.navigationBarStyleName(for: style),
-                "rawValue": style.rawValue
+                "rawValue": self.unifiedNavigationBarRawValue(for: style)
             ])
         }
     }
@@ -328,10 +328,11 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         }
 
         if let rawValue = params["style"] as? NSNumber ?? params["barStyle"] as? NSNumber {
+            // 统一约定：0=default，1=black（2 兼容 iOS UIBarStyle.black 旧值）
             switch rawValue.intValue {
-            case UIBarStyle.default.rawValue:
+            case 0:
                 return .default
-            case UIBarStyle.black.rawValue:
+            case 1, 2:
                 return .black
             default:
                 break
@@ -348,6 +349,11 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         default:
             return "default"
         }
+    }
+
+    /// 统一对外的数值约定（0=default，1=black），与 Android 对齐
+    private func unifiedNavigationBarRawValue(for style: UIBarStyle) -> Int {
+        return style == .black ? 1 : 0
     }
 
     // MARK: - 打开新的 WebView 页面
