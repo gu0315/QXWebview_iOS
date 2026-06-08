@@ -81,12 +81,10 @@ public class QXWebViewController: UIViewController {
         webView.registerPlugin(withName: "QXBasePlugin", plugin: basePlugin)
         webView.registerPlugin(withName: "QXBlePlugin", plugin: blePlugin)
         webView.registerPlugin(withName: "QXHostBridgePlugin", plugin: hostBridgePlugin)
-        // 每次进入 WebView 前先清缓存，避免加载旧页面
+        // 入口文档每次走 ETag 校验(见 makeRequest),H5 更新即时生效;
+        // 需要强制清缓存时,由 H5 调用 QXBasePlugin.setWebCacheToken 触发(保留登录态)
         if let url = urlString {
             self.loadURL(url)
-            /*clearWebViewCache { [weak self] in
-                self?.loadURL(url)
-            }*/
         }
     }
     
@@ -318,6 +316,43 @@ public class QXWebViewController: UIViewController {
         print("QRWebViewController资源清理完成")
     }
     
+    private static let webCacheTokenKey = "QXWebView.cachePurgeToken"
+
+    /// 供 H5 调用(QXBasePlugin.setWebCacheToken)触发的按 token 清缓存:
+    /// 传入 token 与上次记录不同时,清一次 HTTP 缓存并记录新 token;相同则跳过、零开销。
+    /// **保留 cookie、localStorage、sessionStorage**(不影响登录态)。
+    /// - Parameter completion: 回调 `cleared` —— 本次是否真的执行了清理。
+    static func purgeHTTPCacheIfTokenChanged(_ token: String, completion: @escaping (_ cleared: Bool) -> Void) {
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: webCacheTokenKey) != token else {
+            completion(false)
+            return
+        }
+        defaults.set(token, forKey: webCacheTokenKey)
+        purgeHTTPCachePreservingLogin {
+            print("WebView 磁盘缓存已清理(token=\(token))")
+            completion(true)
+        }
+    }
+
+    /// 清磁盘/内存/离线/Fetch 缓存,**保留 cookie、localStorage、sessionStorage**(不掉登录)。
+    static func purgeHTTPCachePreservingLogin(completion: @escaping () -> Void) {
+        var dataTypes: Set<String> = [
+            WKWebsiteDataTypeDiskCache,
+            WKWebsiteDataTypeMemoryCache,
+            WKWebsiteDataTypeOfflineWebApplicationCache
+        ]
+        if #available(iOS 11.3, *) {
+            dataTypes.insert(WKWebsiteDataTypeFetchCache)
+        }
+        URLCache.shared.removeAllCachedResponses()
+        WKWebsiteDataStore.default().removeData(
+            ofTypes: dataTypes,
+            modifiedSince: Date(timeIntervalSince1970: 0),
+            completionHandler: completion
+        )
+    }
+
     /// 清理WebView缓存
     private func clearWebViewCache(completion: (() -> Void)? = nil) {
         webView.stopLoading()
@@ -453,6 +488,11 @@ public class QXWebViewController: UIViewController {
             request.setValue("no-cache, no-store, must-revalidate", forHTTPHeaderField: "Cache-Control")
             request.setValue("no-cache", forHTTPHeaderField: "Pragma")
             request.setValue("0", forHTTPHeaderField: "Expires")
+        } else {
+            // 正式域名:入口文档每次向服务器校验(走 ETag),
+            // 避免老设备命中陈旧的 index.html 缓存而加载旧界面。
+            // 带 hash 的静态资源仍按自身缓存头长缓存,登录态(cookie/localStorage)也不受影响。
+            request.cachePolicy = .reloadRevalidatingCacheData
         }
         return request
     }

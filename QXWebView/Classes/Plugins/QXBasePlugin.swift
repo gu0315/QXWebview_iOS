@@ -52,6 +52,9 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         case "chooseImage":
             handleChooseImage(params: params, callback: callback)
             return true
+        case "setWebCacheToken":
+            handleSetWebCacheToken(params: params, callback: callback)
+            return true
         default:
             callback.onFail(NSError(domain: "DeviceInfoPlugin", code: 1001, userInfo: [NSLocalizedDescriptionKey: "未知操作"]))
             return false
@@ -537,6 +540,30 @@ public class QXBasePlugin: JDBridgeBasePlugin {
 
         default:
             return fallback
+        }
+    }
+
+    // MARK: - 设置 Web 缓存 token（H5 控制清缓存）
+    /// H5 调用示例（建议放在 App 入口 onLaunch / 首屏初始化处）:
+    /// QXBasePlugin.setWebCacheToken({ token: "2026-06-08" })
+    /// // token 变化时 App 清一次 HTTP 缓存（保留登录态）；token 不变则跳过、零开销。
+    /// // 需要让所有设备强制清一次缓存时（如线上缓存异常），H5 部署时改这个 token 即可，无需 App 发版。
+    /// // 返回: { code, msg, cleared, token } —— cleared 表示本次是否真的清了缓存。
+    private func handleSetWebCacheToken(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
+        let token = (params?["token"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !token.isEmpty else {
+            callback.onFail(QXBridgeError.invalidParams("token 不能为空", domain: errorDomain))
+            return
+        }
+        QXWebViewController.purgeHTTPCacheIfTokenChanged(token) { cleared in
+            callback.onSuccess([
+                "code": 0,
+                "msg": cleared ? "缓存已清理" : "token 未变化，已跳过",
+                "cleared": cleared,
+                "token": token
+            ])
         }
     }
 

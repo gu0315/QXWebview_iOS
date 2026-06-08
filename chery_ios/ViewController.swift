@@ -42,7 +42,7 @@ final class UserSession {
 class ViewController: UIViewController {
 
     // 默认 H5 地址（可在界面上修改）
-    private let defaultH5Url = "http://192.168.31.137:5174//#/pages/bluetooth-test/index"
+    private let defaultH5Url = "http://172.20.10.4:5173/"
 
     // MARK: - UI Components
     private let scrollView = UIScrollView()
@@ -161,6 +161,7 @@ class ViewController: UIViewController {
         field.autocapitalizationType = .none
         field.clearButtonMode = .whileEditing
         field.backgroundColor = .white
+        field.text = "15755336837"
         field.snp.makeConstraints { make in
             make.height.equalTo(44)
         }
