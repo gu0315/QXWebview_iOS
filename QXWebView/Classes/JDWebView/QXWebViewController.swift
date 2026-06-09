@@ -75,7 +75,8 @@ public class QXWebViewController: UIViewController {
         webView.registerPlugin(withName: "QXBasePlugin", plugin: basePlugin)
         webView.registerPlugin(withName: "QXBlePlugin", plugin: blePlugin)
         webView.registerPlugin(withName: "QXHostBridgePlugin", plugin: hostBridgePlugin)
-        // 入口文档每次走 ETag 校验(见 makeRequest),H5 更新即时生效;
+        // 入口 HTML 由服务端响应头 `Cache-Control: no-cache` + `ETag` 控制,
+        // WKWebView 默认策略即可命中 304/重拉,H5 更新即时生效;
         // 需要强制清缓存时,由 H5 调用 QXBasePlugin.setWebCacheToken 触发(保留登录态)
         if let url = urlString {
             self.loadURL(url)
@@ -394,9 +395,7 @@ public class QXWebViewController: UIViewController {
             print("开始加载本地URL: \(urlString)")
             return
         }
-        // 创建请求
-        let request = makeRequest(for: url)
-        webView.load(request)
+        webView.load(URLRequest(url: url))
         print("开始加载URL: \(urlString)")
     }
 
@@ -442,17 +441,6 @@ public class QXWebViewController: UIViewController {
            // 扩展：可添加更多状态栏样式逻辑
         }
     }
-
-    /// 入口文档统一走 ETag 校验:
-    /// 避免老设备命中陈旧的 index.html 缓存而加载旧界面;
-    /// 带 hash 的静态资源仍按自身缓存头长缓存,登录态(cookie/localStorage)也不受影响。
-    private func makeRequest(for url: URL) -> URLRequest {
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30
-        request.cachePolicy = .reloadRevalidatingCacheData
-        return request
-    }
-
 
     public func openFile(fileURL: URL) {
         DispatchQueue.main.async { [weak self] in
@@ -523,7 +511,7 @@ extension QXWebViewController: WebViewDelegate {
             if url.isFileURL {
                 webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
             } else {
-                webView.load(makeRequest(for: url))
+                webView.load(URLRequest(url: url))
             }
             decisionHandler(.cancel)
             return
