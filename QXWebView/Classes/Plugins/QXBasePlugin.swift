@@ -55,6 +55,18 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         case "setWebCacheToken":
             handleSetWebCacheToken(params: params, callback: callback)
             return true
+        case "setStorage":
+            handleSetStorage(params: params, callback: callback)
+            return true
+        case "getStorage":
+            handleGetStorage(params: params, callback: callback)
+            return true
+        case "removeStorage":
+            handleRemoveStorage(params: params, callback: callback)
+            return true
+        case "clearStorage":
+            handleClearStorage(callback: callback)
+            return true
         default:
             callback.onFail(NSError(domain: "DeviceInfoPlugin", code: 1001, userInfo: [NSLocalizedDescriptionKey: "未知操作"]))
             return false
@@ -565,6 +577,64 @@ public class QXBasePlugin: JDBridgeBasePlugin {
                 "token": token
             ])
         }
+    }
+
+    // MARK: - 原生 KV 存储(替代易丢失的 localStorage)
+    /// 存储命名空间:与其他模块的 UserDefaults 隔离,避免 key 冲突。
+    private static let storageSuiteName = "com.qx.bridge.storage"
+    private static let storageDefaults: UserDefaults = {
+        UserDefaults(suiteName: storageSuiteName) ?? .standard
+    }()
+
+    /// H5 调用:QXBasePlugin.setStorage({ key: "token", value: "xxx" })
+    /// - value 支持 String / Number / Bool / Array / Dictionary,JSON 可序列化。
+    private func handleSetStorage(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
+        guard let key = (params?["key"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !key.isEmpty else {
+            callback.onFail(QXBridgeError.invalidParams("key 不能为空", domain: errorDomain))
+            return
+        }
+        let value = params?["value"]
+        if value == nil || value is NSNull {
+            Self.storageDefaults.removeObject(forKey: key)
+        } else {
+            Self.storageDefaults.set(value, forKey: key)
+        }
+        callback.onSuccess(["code": 0, "msg": "ok", "key": key])
+    }
+
+    /// H5 调用:const res = await QXBasePlugin.getStorage({ key: "token" })
+    /// - 返回:{ code, value }。key 不存在时 value 为 null。
+    private func handleGetStorage(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
+        guard let key = (params?["key"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !key.isEmpty else {
+            callback.onFail(QXBridgeError.invalidParams("key 不能为空", domain: errorDomain))
+            return
+        }
+        let value = Self.storageDefaults.object(forKey: key) ?? NSNull()
+        callback.onSuccess(["code": 0, "key": key, "value": value])
+    }
+
+    /// H5 调用:QXBasePlugin.removeStorage({ key: "token" })
+    private func handleRemoveStorage(params: [AnyHashable : Any]!, callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
+        guard let key = (params?["key"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !key.isEmpty else {
+            callback.onFail(QXBridgeError.invalidParams("key 不能为空", domain: errorDomain))
+            return
+        }
+        Self.storageDefaults.removeObject(forKey: key)
+        callback.onSuccess(["code": 0, "msg": "ok", "key": key])
+    }
+
+    /// H5 调用:QXBasePlugin.clearStorage()
+    /// 清空 Bridge 自有命名空间,**不影响 App 其它 UserDefaults**。
+    private func handleClearStorage(callback: JDBridgeCallBack!) {
+        guard let callback = callback else { return }
+        Self.storageDefaults.removePersistentDomain(forName: Self.storageSuiteName)
+        callback.onSuccess(["code": 0, "msg": "ok"])
     }
 
     /// 将字典参数拼到已有 URL 的 query 上（保留原 query，自动做百分号编码）

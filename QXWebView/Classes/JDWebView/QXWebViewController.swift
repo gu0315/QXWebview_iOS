@@ -17,11 +17,6 @@ private struct ScreenConst {
     static let screenHeight = UIScreen.main.bounds.height
 }
 
-private enum WebCacheMode {
-    case standard
-    case noCache
-}
-
 @objc(QRWebViewController)
 public class QXWebViewController: UIViewController {
     
@@ -30,7 +25,6 @@ public class QXWebViewController: UIViewController {
     var webView: JDWebViewContainer!
     /// 加载的URL
     var urlString: String?
-    private var webCacheMode: WebCacheMode = .standard
     private var navigationBarStyleOverride: UIBarStyle?
     
     @objc public weak var hostDelegate: QXWebViewHostDelegate?
@@ -132,8 +126,7 @@ public class QXWebViewController: UIViewController {
     /// - Parameter url: 要加载的URL
     public init(url: String) {
         self.urlString = url
-        self.webCacheMode = Self.resolveCacheMode(for: url)
-        super.init(nibName: nil, bundle: nil) 
+        super.init(nibName: nil, bundle: nil)
     }
     
     required public init?(coder: NSCoder) {
@@ -155,7 +148,6 @@ public class QXWebViewController: UIViewController {
     /// 设置WebView
     private func setupWebView() {
         let configuration = JDWebViewContainer.defaultConfiguration()
-        applyCacheMode(to: configuration)
         // 优化WebView配置
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
@@ -353,46 +345,24 @@ public class QXWebViewController: UIViewController {
         )
     }
 
-    /// 清理WebView缓存
+    /// 清理 WebView 缓存(磁盘/内存/Offline/Fetch),**保留 cookie、localStorage、sessionStorage**(不掉登录)。
+    /// 与 purgeHTTPCachePreservingLogin 行为一致,确保低内存等场景不会误清登录态。
     private func clearWebViewCache(completion: (() -> Void)? = nil) {
         webView.stopLoading()
         URLCache.shared.removeAllCachedResponses()
 
-        let sharedCookieStorage = HTTPCookieStorage.shared
-        sharedCookieStorage.cookies?.forEach { sharedCookieStorage.deleteCookie($0) }
+        var dataTypes: Set<String> = [
+            WKWebsiteDataTypeDiskCache,
+            WKWebsiteDataTypeMemoryCache,
+            WKWebsiteDataTypeOfflineWebApplicationCache
+        ]
+        if #available(iOS 11.3, *) {
+            dataTypes.insert(WKWebsiteDataTypeFetchCache)
+        }
 
         let dataStore = webView.realWebView.configuration.websiteDataStore
-        let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
-        let date = Date(timeIntervalSince1970: 0)
-        let group = DispatchGroup()
-
-        group.enter()
-        dataStore.removeData(ofTypes: dataTypes, modifiedSince: date) {
-            group.leave()
-        }
-
-        group.enter()
-        let cookieStore = dataStore.httpCookieStore
-        cookieStore.getAllCookies { cookies in
-            if cookies.isEmpty {
-                group.leave()
-                return
-            }
-
-            let cookieGroup = DispatchGroup()
-            for cookie in cookies {
-                cookieGroup.enter()
-                cookieStore.delete(cookie) {
-                    cookieGroup.leave()
-                }
-            }
-            cookieGroup.notify(queue: .main) {
-                group.leave()
-            }
-        }
-
-        group.notify(queue: .main) {
-            print("WebView缓存清理完成")
+        dataStore.removeData(ofTypes: dataTypes, modifiedSince: Date(timeIntervalSince1970: 0)) {
+            print("WebView 缓存清理完成(保留登录态)")
             completion?()
         }
     }
@@ -413,7 +383,6 @@ public class QXWebViewController: UIViewController {
     func loadURL(_ urlString: String) {
         // 检查URL中是否包含状态栏和导航栏的控制参数
         parseURLParameters(urlString: urlString)
-        webCacheMode = Self.resolveCacheMode(for: urlString)
         // 安全地转换URL字符串为URL
         guard let url = URL(string: urlString) else {
             print("URL格式错误：\(urlString)")
@@ -474,56 +443,17 @@ public class QXWebViewController: UIViewController {
         }
     }
 
-    private func applyCacheMode(to configuration: WKWebViewConfiguration) {
-        if webCacheMode == .noCache {
-            configuration.websiteDataStore = .nonPersistent()
-        }
-    }
-
+    /// 入口文档统一走 ETag 校验:
+    /// 避免老设备命中陈旧的 index.html 缓存而加载旧界面;
+    /// 带 hash 的静态资源仍按自身缓存头长缓存,登录态(cookie/localStorage)也不受影响。
     private func makeRequest(for url: URL) -> URLRequest {
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
-        if Self.resolveCacheMode(for: url.absoluteString) == .noCache {
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.setValue("no-cache, no-store, must-revalidate", forHTTPHeaderField: "Cache-Control")
-            request.setValue("no-cache", forHTTPHeaderField: "Pragma")
-            request.setValue("0", forHTTPHeaderField: "Expires")
-        } else {
-            // 正式域名:入口文档每次向服务器校验(走 ETag),
-            // 避免老设备命中陈旧的 index.html 缓存而加载旧界面。
-            // 带 hash 的静态资源仍按自身缓存头长缓存,登录态(cookie/localStorage)也不受影响。
-            request.cachePolicy = .reloadRevalidatingCacheData
-        }
+        request.cachePolicy = .reloadRevalidatingCacheData
         return request
     }
 
-    private static func resolveCacheMode(for urlString: String) -> WebCacheMode {
-        guard
-            let url = URL(string: urlString),
-            let host = url.host?.lowercased()
-        else {
-            return .standard
-        }
-        if host == "localhost" || host == "127.0.0.1" || host == "::1" || host.hasSuffix(".local") {
-            return .noCache
-        }
-        let octets = host.split(separator: ".").compactMap { Int($0) }
-        guard octets.count == 4 else {
-            return .standard
-        }
-        if octets[0] == 10 || octets[0] == 127 {
-            return .noCache
-        }
-        if octets[0] == 192 && octets[1] == 168 {
-            return .noCache
-        }
-        if octets[0] == 172 && (16...31).contains(octets[1]) {
-            return .noCache
-        }
-        return .standard
-    }
-    
-    
+
     public func openFile(fileURL: URL) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
