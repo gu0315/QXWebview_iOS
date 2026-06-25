@@ -161,7 +161,7 @@ class ViewController: UIViewController {
         field.autocapitalizationType = .none
         field.clearButtonMode = .whileEditing
         field.backgroundColor = .white
-        field.text = "15755336837"
+        field.text = "15755336837" //18352537909
         field.snp.makeConstraints { make in
             make.height.equalTo(44)
         }
@@ -261,6 +261,7 @@ final class VehicleRowView: UIView {
         field.borderStyle = .roundedRect
         field.font = .systemFont(ofSize: 15)
         field.autocorrectionType = .no
+        field.text = ""
         field.autocapitalizationType = .allCharacters
         field.backgroundColor = .white
         return field

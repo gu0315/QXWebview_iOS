@@ -72,9 +72,12 @@ public class QXWebViewController: UIViewController {
         let basePlugin = QXBasePlugin()
         let blePlugin = QXBlePlugin()
         let hostBridgePlugin = QXHostBridgePlugin()
+        let lifecyclePlugin = QXLifecyclePlugin()
         webView.registerPlugin(withName: "QXBasePlugin", plugin: basePlugin)
         webView.registerPlugin(withName: "QXBlePlugin", plugin: blePlugin)
         webView.registerPlugin(withName: "QXHostBridgePlugin", plugin: hostBridgePlugin)
+        webView.registerPlugin(withName: QXLifecyclePlugin.pluginName, plugin: lifecyclePlugin)
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageLoad", nativeType: "viewDidLoad")
         // 入口 HTML 由服务端响应头 `Cache-Control: no-cache` + `ETag` 控制,
         // WKWebView 默认策略即可命中 304/重拉,H5 更新即时生效;
         // 需要强制清缓存时,由 H5 调用 QXBasePlugin.setWebCacheToken 触发(保留登录态)
@@ -89,20 +92,28 @@ public class QXWebViewController: UIViewController {
         navigationController?.setNavigationBarHidden(isNavigationBarHidden, animated: animated)
         // 更新状态栏样式
         updateStatusBarStyle()
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageWillShow", nativeType: "viewWillAppear")
+    }
+
+    public override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageShow", nativeType: "viewDidAppear")
     }
     
     public override func viewWillDisappear(_ animated: Bool) {
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageWillHide", nativeType: "viewWillDisappear")
         super.viewWillDisappear(animated)
     }
 
     public override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageHide", nativeType: "viewDidDisappear")
         // 被 pop 出栈 / 被 dismiss（用户返回，未调用 closeWithResult）=> 回传取消兜底
         if isMovingFromParent || isBeingDismissed, let pageId = hostPageId {
             QXPageResultCenter.shared.cancel(pageId)
         }
     }
-    
+
     public override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateWebViewFrame()
@@ -471,6 +482,8 @@ public class QXWebViewController: UIViewController {
     }
     
     deinit {
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageDestroy", nativeType: "deinit")
+        QXLifecyclePlugin.clear(webView: webView)
         // 移除通知监听
         NotificationCenter.default.removeObserver(self)
         print("QRWebViewController已释放")

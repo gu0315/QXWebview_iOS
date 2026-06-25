@@ -55,11 +55,15 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		E621EFE32E98CF84007013BF /* chery_iosTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = chery_iosTests;
 			sourceTree = "<group>";
 		};
 		E621EFED2E98CF84007013BF /* chery_iosUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = chery_iosUITests;
 			sourceTree = "<group>";
 		};
@@ -292,13 +296,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-chery_ios/Pods-chery_ios-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-chery_ios/Pods-chery_ios-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
