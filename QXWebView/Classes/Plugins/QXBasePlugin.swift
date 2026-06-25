@@ -67,10 +67,22 @@ public class QXBasePlugin: JDBridgeBasePlugin {
         case "clearStorage":
             handleClearStorage(callback: callback)
             return true
+        case "notifyFirstRender":
+            handleNotifyFirstRender(callback: callback)
+            return true
         default:
             callback.onFail(NSError(domain: "DeviceInfoPlugin", code: 1001, userInfo: [NSLocalizedDescriptionKey: "未知操作"]))
             return false
         }
+    }
+
+    private func handleNotifyFirstRender(callback: JDBridgeCallBack) {
+        if let viewController = callback.webViewController as? QXWebViewController {
+            viewController.hideInitialLoading()
+        } else if let viewController = callback.findWebViewController() {
+            viewController.hideInitialLoading()
+        }
+        callback.onSuccess(["success": true])
     }
     
     // MARK: - 扫码处理（仅保留code+文案）

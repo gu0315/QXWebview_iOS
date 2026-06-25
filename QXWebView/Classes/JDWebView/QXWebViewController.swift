@@ -33,6 +33,8 @@ public class QXWebViewController: UIViewController {
     var hostPageId: String?
 
     private var previewFileURL: URL!
+    private var initialLoadingView: UIView?
+    private var initialLoadingWorkItem: DispatchWorkItem?
 
     // MARK: - 布局控制属性
     var isNavigationBarHidden: Bool = true {
@@ -155,6 +157,8 @@ public class QXWebViewController: UIViewController {
         setupWebView()
         // 添加原生AutoLayout约束
         setupNativeConstraints()
+        setupInitialLoadingView()
+        showInitialLoading()
     }
     
     /// 设置WebView
@@ -206,6 +210,62 @@ public class QXWebViewController: UIViewController {
         webView.realWebView.scrollView.showsVerticalScrollIndicator = false
         webView.realWebView.scrollView.showsHorizontalScrollIndicator = false
         webView.realWebView.scrollView.bounces = true
+    }
+
+    private func setupInitialLoadingView() {
+        let loadingView = UIView()
+        loadingView.translatesAutoresizingMaskIntoConstraints = false
+        loadingView.backgroundColor = .systemBackground
+        loadingView.isUserInteractionEnabled = true
+
+        let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        indicator.startAnimating()
+        loadingView.addSubview(indicator)
+
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "加载中..."
+        label.textColor = .secondaryLabel
+        label.font = .systemFont(ofSize: 14)
+        loadingView.addSubview(label)
+
+        view.addSubview(loadingView)
+        NSLayoutConstraint.activate([
+            loadingView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            loadingView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            loadingView.topAnchor.constraint(equalTo: view.topAnchor),
+            loadingView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            indicator.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor),
+            indicator.centerYAnchor.constraint(equalTo: loadingView.centerYAnchor),
+            label.topAnchor.constraint(equalTo: indicator.bottomAnchor, constant: 12),
+            label.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor)
+        ])
+        initialLoadingView = loadingView
+    }
+
+    public func showInitialLoading() {
+        initialLoadingWorkItem?.cancel()
+        initialLoadingView?.isHidden = false
+        if let initialLoadingView {
+            view.bringSubviewToFront(initialLoadingView)
+        }
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.hideInitialLoading()
+        }
+        initialLoadingWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: workItem)
+    }
+
+    public func hideInitialLoading() {
+        initialLoadingWorkItem?.cancel()
+        initialLoadingWorkItem = nil
+        UIView.animate(withDuration: 0.18) {
+            self.initialLoadingView?.alpha = 0
+        } completion: { _ in
+            self.initialLoadingView?.isHidden = true
+            self.initialLoadingView?.alpha = 1
+        }
     }
     
     /// 设置通知监听
@@ -482,6 +542,7 @@ public class QXWebViewController: UIViewController {
     }
     
     deinit {
+        initialLoadingWorkItem?.cancel()
         QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageDestroy", nativeType: "deinit")
         QXLifecyclePlugin.clear(webView: webView)
         // 移除通知监听
@@ -495,11 +556,13 @@ extension QXWebViewController: WebViewDelegate {
     
     // 网页开始加载时调用
     public func webView(_ webView: JDWebViewContainer, didStartProvisionalNavigation navigation: WKNavigation!) {
+        showInitialLoading()
         print("网页开始加载")
     }
     
     // 网页加载完成时调用
     public func webView(_ webView: JDWebViewContainer, didFinish navigation: WKNavigation!) {
+        hideInitialLoading()
         print("网页加载完成")
     }
     
