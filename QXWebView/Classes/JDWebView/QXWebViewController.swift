@@ -35,6 +35,7 @@ public class QXWebViewController: UIViewController {
     private var previewFileURL: URL!
     private var initialLoadingView: UIView?
     private var initialLoadingWorkItem: DispatchWorkItem?
+    private var initialLoadingPageFinishWorkItem: DispatchWorkItem?
 
     // MARK: - 布局控制属性
     var isNavigationBarHidden: Bool = true {
@@ -246,6 +247,7 @@ public class QXWebViewController: UIViewController {
 
     public func showInitialLoading() {
         initialLoadingWorkItem?.cancel()
+        initialLoadingPageFinishWorkItem?.cancel()
         initialLoadingView?.isHidden = false
         if let initialLoadingView {
             view.bringSubviewToFront(initialLoadingView)
@@ -259,13 +261,24 @@ public class QXWebViewController: UIViewController {
 
     public func hideInitialLoading() {
         initialLoadingWorkItem?.cancel()
+        initialLoadingPageFinishWorkItem?.cancel()
         initialLoadingWorkItem = nil
+        initialLoadingPageFinishWorkItem = nil
         UIView.animate(withDuration: 0.18) {
             self.initialLoadingView?.alpha = 0
         } completion: { _ in
             self.initialLoadingView?.isHidden = true
             self.initialLoadingView?.alpha = 1
         }
+    }
+
+    private func scheduleInitialLoadingPageFinishFallback() {
+        initialLoadingPageFinishWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.hideInitialLoading()
+        }
+        initialLoadingPageFinishWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: workItem)
     }
     
     /// 设置通知监听
@@ -543,6 +556,7 @@ public class QXWebViewController: UIViewController {
     
     deinit {
         initialLoadingWorkItem?.cancel()
+        initialLoadingPageFinishWorkItem?.cancel()
         QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageDestroy", nativeType: "deinit")
         QXLifecyclePlugin.clear(webView: webView)
         // 移除通知监听
@@ -562,12 +576,13 @@ extension QXWebViewController: WebViewDelegate {
     
     // 网页加载完成时调用
     public func webView(_ webView: JDWebViewContainer, didFinish navigation: WKNavigation!) {
-        hideInitialLoading()
+        scheduleInitialLoadingPageFinishFallback()
         print("网页加载完成")
     }
     
     // 网页加载失败时调用
     public func webView(_ webView: JDWebViewContainer, didFail navigation: WKNavigation!, withError error: Error) {
+        hideInitialLoading()
         print("网页加载失败: \(error.localizedDescription)")
     }
     
