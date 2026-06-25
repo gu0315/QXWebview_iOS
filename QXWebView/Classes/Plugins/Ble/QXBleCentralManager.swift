@@ -407,7 +407,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         )
         if let connectedPeripheral = systemConnected.first(where: { $0.identifier.uuidString == deviceId }) {
             connectedPeripheral.delegate = QXBlePeripheralManager.shared
-            cachePeripheral(connectedPeripheral, rssi: 0)
+            _ = cachePeripheral(connectedPeripheral, rssi: 0)
             QXBleLogger.log("命中系统已连接设备：\(connectedPeripheral.name ?? "未知") (\(deviceId))")
             return connectedPeripheral
         }
@@ -415,7 +415,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         if let uuid = UUID(uuidString: deviceId),
            let knownPeripheral = centralManager.retrievePeripherals(withIdentifiers: [uuid]).first {
             knownPeripheral.delegate = QXBlePeripheralManager.shared
-            cachePeripheral(knownPeripheral)
+            _ = cachePeripheral(knownPeripheral)
             QXBleLogger.log("命中系统已知设备：\(knownPeripheral.name ?? "未知") (\(deviceId))")
             return knownPeripheral
         }
