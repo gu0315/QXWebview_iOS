@@ -35,6 +35,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     /// 单次连接的默认超时（秒）；超时后给 JS 端 fail，避免 Promise 悬挂。
     private static let connectTimeoutSeconds: TimeInterval = 15.0
 
+    /// 家充桩 BLE 主服务。用于补齐系统已连接但当前扫描不可见的设备。
+    private static let defaultPileServiceUUIDs = [CBUUID(string: "FF00")]
+
     /// 权限弹窗串行返回，这里保留所有待完成的调用方。
     private var permissionCallbacks: [JDBridgeCallBack] = []
     
@@ -141,6 +144,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             centralManager.stopScan()
         }
         cancelScanTimeout()
+        includeSystemConnectedPeripherals(services: services)
         
         let scanOptions: [String: Any] = [
             CBCentralManagerScanOptionAllowDuplicatesKey: false
@@ -152,7 +156,59 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         QXBleLogger.log("开始扫描蓝牙设备")
         return true
     }
+
+    private func serviceUUIDsForSystemConnectedLookup(_ services: [CBUUID]?) -> [CBUUID] {
+        guard let services = services, !services.isEmpty else {
+            return Self.defaultPileServiceUUIDs
+        }
+        return services
+    }
     
+    private func cachePeripheral(_ peripheral: CBPeripheral, rssi: NSNumber? = nil) -> Bool {
+        let deviceId = peripheral.identifier.uuidString
+        let isNew = !discoveredPeripherals.contains { $0.identifier.uuidString == deviceId }
+        if isNew {
+            discoveredPeripherals.append(peripheral)
+        }
+        if let rssi = rssi {
+            deviceRSSICache[deviceId] = rssi
+        }
+        return isNew
+    }
+
+    private func emitDeviceFound(_ peripheral: CBPeripheral, name: String? = nil, rssi: NSNumber = 0) {
+        let deviceId = peripheral.identifier.uuidString
+        let finalDeviceName = name ?? peripheral.name ?? ""
+        withCallbacks(matchingPrefix: QXBLEventType.onBluetoothDeviceFound.prefix) { _, callback in
+            let params: [String: Any] = [
+                "name": finalDeviceName,
+                "RSSI": rssi.intValue,
+                "deviceId": deviceId,
+                "eventName": "onBluetoothDeviceFound",
+                "isSystemConnected": peripheral.state == .connected
+            ]
+
+            callback.callJSWithPluginName("QXBlePlugin", params: params) { _, _ in }
+        }
+    }
+
+    private func includeSystemConnectedPeripherals(services: [CBUUID]?) {
+        guard let centralManager = centralManager else { return }
+        let connectedPeripherals = centralManager.retrieveConnectedPeripherals(
+            withServices: serviceUUIDsForSystemConnectedLookup(services)
+        )
+        guard !connectedPeripherals.isEmpty else { return }
+
+        QXBleLogger.log("发现系统已连接蓝牙设备：\(connectedPeripherals.count)台")
+        connectedPeripherals.forEach { peripheral in
+            peripheral.delegate = QXBlePeripheralManager.shared
+            let isNew = cachePeripheral(peripheral, rssi: 0)
+            if isNew {
+                emitDeviceFound(peripheral, rssi: 0)
+            }
+        }
+    }
+
     public func stopScan(callbackKey: String) {
         cancelScanTimeout()
         
@@ -289,7 +345,7 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             return
         }
 
-        guard let peripheral = discoveredPeripherals.first(where: { $0.identifier.uuidString == deviceId }) else {
+        guard let peripheral = resolvePeripheral(deviceId: deviceId) else {
             callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound, customMessage: "未找到指定设备"))
             return
         }
@@ -335,7 +391,38 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
         QXBleLogger.log("🔗 开始连接设备：\(peripheral.name ?? "未知") (\(deviceId))")
         centralManager.connect(peripheral, options: connectOptions)
     }
-    
+
+    private func resolvePeripheral(deviceId: String) -> CBPeripheral? {
+        if let currentPeripheral = currentConnectedPeripheral,
+           currentPeripheral.identifier.uuidString == deviceId {
+            return currentPeripheral
+        }
+
+        if let discoveredPeripheral = discoveredPeripherals.first(where: { $0.identifier.uuidString == deviceId }) {
+            return discoveredPeripheral
+        }
+
+        let systemConnected = centralManager.retrieveConnectedPeripherals(
+            withServices: serviceUUIDsForSystemConnectedLookup(nil)
+        )
+        if let connectedPeripheral = systemConnected.first(where: { $0.identifier.uuidString == deviceId }) {
+            connectedPeripheral.delegate = QXBlePeripheralManager.shared
+            cachePeripheral(connectedPeripheral, rssi: 0)
+            QXBleLogger.log("命中系统已连接设备：\(connectedPeripheral.name ?? "未知") (\(deviceId))")
+            return connectedPeripheral
+        }
+
+        if let uuid = UUID(uuidString: deviceId),
+           let knownPeripheral = centralManager.retrievePeripherals(withIdentifiers: [uuid]).first {
+            knownPeripheral.delegate = QXBlePeripheralManager.shared
+            cachePeripheral(knownPeripheral)
+            QXBleLogger.log("命中系统已知设备：\(knownPeripheral.name ?? "未知") (\(deviceId))")
+            return knownPeripheral
+        }
+
+        return nil
+    }
+
     private func updateCurrentConnectedPeripheral(_ peripheral: CBPeripheral) {
         let deviceId = peripheral.identifier.uuidString
         
@@ -591,7 +678,9 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
             result["data"] = ["devices": []]
             return result
         }
-        
+
+        includeSystemConnectedPeripherals(services: nil)
+
         // 格式化设备列表，符合 uni-app 文档标准
         let devices = discoveredPeripherals.map { peripheral -> [String: Any] in
             let deviceId = peripheral.identifier.uuidString
@@ -668,36 +757,13 @@ public class QXBleCentralManager: NSObject, CBCentralManagerDelegate {
     }
     
     public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        guard peripheral.name != nil else {
-            return
-        }
-        
         let broadcastName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
         let peripheralName = peripheral.name
-        let finalDeviceName = broadcastName ?? peripheralName ?? "未知设备"
-        let deviceId = peripheral.identifier.uuidString
-        let isExisted = discoveredPeripherals.contains { $0.identifier.uuidString == deviceId }
+        let finalDeviceName = broadcastName ?? peripheralName ?? ""
+        let isExisted = !cachePeripheral(peripheral, rssi: RSSI)
         
         if !isExisted {
-            discoveredPeripherals.append(peripheral)
-            // QXBleLogger.log("发现新设备：\(peripheral.name ?? "未知") (\(deviceId)), RSSI: \(RSSI)")
-        }
-        
-        deviceRSSICache[deviceId] = RSSI
-        
-        if !isExisted {
-            withCallbacks(matchingPrefix: QXBLEventType.onBluetoothDeviceFound.prefix) { _, callback in
-                let params: [String: Any] = [
-                    "name": finalDeviceName,
-                    "RSSI": RSSI.intValue,
-                    "deviceId": deviceId,
-                    "eventName": "onBluetoothDeviceFound"
-                ]
-
-                callback.callJSWithPluginName("QXBlePlugin", params: params) { _, _ in
-                    // QXBleLogger.log("✅ 设备发现事件已通知JS端：\(peripheral.name ?? "未知")")
-                }
-            }
+            emitDeviceFound(peripheral, name: finalDeviceName, rssi: RSSI)
         }
     }
     
