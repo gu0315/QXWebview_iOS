@@ -2,10 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>相册权限</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>需要获取您的位置信息以提供定位服务</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -30,5 +28,9 @@
 	</array>
 	<key>NSBluetoothWhenInUseUsageDescription</key>
 	<string>蓝牙</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问相册以选择图片（如设置头像）</string>
+	<key>NSCameraUsageDescription</key>
+	<string>需要使用相机以拍照（如设置头像、扫码）</string>
 </dict>
 </plist>

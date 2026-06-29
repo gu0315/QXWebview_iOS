@@ -1,132 +1,81 @@
-//
-//  QXBlePlugin.swift
-//  MJExtension
-//
-//  蓝牙桥接插件核心类
-//  功能：作为OC与Swift的桥接层，对外提供统一的蓝牙操作接口，适配JS/OC调用
-//  作者：顾钱想
-//  日期：2025/12/23
-//
-
 import Foundation
 import CoreBluetooth
 
 @objc(QXBlePlugin)
 public class QXBlePlugin: JDBridgeBasePlugin {
-    /// 错误域标识，用于区分蓝牙插件的错误来源
     private let errorDomain = "QXBlePlugin"
     
-    // MARK: - 重写 OC 父类方法（关键：严格匹配签名）
-    /// 执行蓝牙操作的核心入口方法
-    /// - Parameters:
-    ///   - action: 操作指令名称（如initBle、startBluetoothDevicesDiscovery）
-    ///   - params: 操作参数字典
-    ///   - callback: 结果回调对象（用于返回成功/失败结果）
-    /// - Returns: 是否支持该操作指令
+    // MARK: - Entry
+    /// JS Bridge 的统一入口，签名需要与 OC 基类保持一致。
     @objc public override func excute(_ action: String, params: [AnyHashable : Any], callback: JDBridgeCallBack) -> Bool {
-        print("QXBlePlugin-excute-action:\(action), params:\(params)")
-        // 根据指令名称分发到对应处理方法
         switch action {
         case "openBluetoothAdapter":
-            // 初始化蓝牙管理器
             initBle(params: params, callback: callback)
             return true
         case "startBluetoothDevicesDiscovery":
-            // 开始扫描蓝牙设备
             startBluetoothDevicesDiscovery(params: params, callback: callback)
             return true
         case "stopBluetoothDevicesDiscovery":
-            // 停止扫描蓝牙设备
             stopBluetoothDevicesDiscovery(params: params, callback: callback)
             return true
         case "createBLEConnection":
-            // 连接蓝牙设备
             createBLEConnection(params: params, callback: callback)
             return true
         case "getBLEDeviceServices":
-            // 获取设备服务列表
             getBLEDeviceServices(params: params, callback: callback)
             return true
         case "getBLEDeviceCharacteristics":
-            // 获取服务下的特征值列表
             getBLEDeviceCharacteristics(params: params, callback: callback)
             return true
         case "closeBLEConnection":
-            // 断开蓝牙设备连接
             closeBLEConnection(params: params, callback: callback)
             return true
         case "writeBLECharacteristicValue":
-            // 向特征值写入数据
             writeBLECharacteristicValue(params: params, callback: callback)
             return true
         case "notifyBLECharacteristicValueChange":
-            // 开启/关闭特征值通知
             notifyBLECharacteristicValueChange(params: params, callback: callback)
             return true
         case "requestBluetoothPermission":
-            // 请求蓝牙权限
             requestBluetoothPermission(params: params, callback: callback)
             return true
         case "checkBluetoothPermission":
-            // 检查蓝牙权限状态
             checkBluetoothPermission(params: params, callback: callback)
             return true
         case "openAppSettings":
-            // 打开应用设置页面
             openAppSettings(params: params, callback: callback)
             return true
         case "closeBluetoothAdapter":
-            // 关闭蓝牙适配器
             closeBluetoothAdapter(params: params, callback: callback)
             return true
         case "getBluetoothAdapterState":
-            // 获取蓝牙适配器状态
             getBluetoothAdapterState(params: params, callback: callback)
             return true
         case "getBluetoothDevices":
-            // 获取已发现的蓝牙设备
             getBluetoothDevices(params: params, callback: callback)
             return true
         default:
-            // 不支持的操作，返回失败
             callback.onFail(QXBleResult.failure(errorCode: .unknownError, customMessage: "不支持的操作：\(action)"))
             return false
         }
     }
     
-    // MARK: - 权限相关
-    /// 请求蓝牙权限
-    /// - Parameters:
-    ///   - params: 预留参数（暂无实际用途）
-    ///   - callback: 权限请求结果回调
+    // MARK: - Permission
     private func requestBluetoothPermission(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
         QXBleCentralManager.shared.requestBluetoothPermission(callback: callback)
     }
     
-    /// 检查蓝牙权限状态
-    /// - Parameters:
-    ///   - params: 预留参数（暂无实际用途）
-    ///   - callback: 权限检查结果回调
     private func checkBluetoothPermission(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
         var permissionData: [String: Any] = [:]
         
-        // 区分iOS版本处理权限检查
-        if #available(iOS 13.1, *) {
-            let auth = QXBleUtils.checkBluetoothPermission()
-            permissionData["authorization"] = auth.rawValue          // 权限状态原始值
-            permissionData["authorizationDesc"] = auth.description   // 权限状态描述
-        } else {
-            let status = QXBleUtils.checkBluetoothPermissionLegacy()
-            permissionData["authorization"] = status.rawValue
-            permissionData["authorizationDesc"] = status.description
-        }
+        let auth = QXBleUtils.checkBluetoothPermission()
+        permissionData["authorization"] = auth.rawValue
+        permissionData["authorizationDesc"] = auth.description
         
-        // 封装权限状态便捷字段
-        permissionData["isAuthorized"] = QXBleUtils.isBluetoothPermissionAuthorized()      // 是否已授权
-        permissionData["isDenied"] = QXBleUtils.isBluetoothPermissionDenied()              // 是否被拒绝
-        permissionData["isNotDetermined"] = QXBleUtils.isBluetoothPermissionNotDetermined()// 是否未确定
+        permissionData["isAuthorized"] = QXBleUtils.isBluetoothPermissionAuthorized()
+        permissionData["isDenied"] = QXBleUtils.isBluetoothPermissionDenied()
+        permissionData["isNotDetermined"] = QXBleUtils.isBluetoothPermissionNotDetermined()
         
-        // 返回权限检查结果
         let result = QXBleResult.success(
             data: permissionData,
             message: "权限检查完成"
@@ -134,45 +83,28 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         callback.onSuccess(result)
     }
     
-    /// 打开应用设置页面（用于用户手动开启蓝牙权限）
-    /// - Parameters:
-    ///   - params: 预留参数（暂无实际用途）
-    ///   - callback: 操作结果回调
     private func openAppSettings(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
         QXBleUtils.openAppSettings()
         callback.onSuccess(QXBleResult.success(message: "已打开应用设置页面"))
     }
     
-    /// 关闭蓝牙适配器
-    /// - Parameters:
-    ///   - params: 预留参数（暂无实际用途）
-    ///   - callback: 关闭结果回调
     private func closeBluetoothAdapter(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 调用中心管理器关闭蓝牙适配器
         QXBleCentralManager.shared.closeBluetoothAdapter()
-        // 返回关闭成功结果
         callback.onSuccess(QXBleResult.success(message: "蓝牙适配器已关闭"))
     }
     
-    /// 获取本机蓝牙适配器状态
-    /// - Parameters:
-    ///   - params: 预留参数（暂无实际用途）
-    ///   - callback: 获取状态结果回调
     private func getBluetoothAdapterState(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 调用中心管理器获取蓝牙适配器状态
         let stateResult = QXBleCentralManager.shared.getBluetoothAdapterState()
         
-        // 根据状态返回相应的结果
         if let errorCode = stateResult["errorCode"] as? Int, errorCode != 0 {
-            // 有错误，返回失败结果
             let errorMessage = stateResult["errorMessage"] as? String ?? "获取蓝牙适配器状态失败"
-            callback.onFail([
-                "code": errorCode,
-                "message": errorMessage,
-                "data": stateResult["data"] ?? [:]
-            ])
+            callback.onFail(QXBridgeError.make(
+                code: errorCode,
+                message: errorMessage,
+                domain: errorDomain,
+                data: stateResult["data"] ?? [:]
+            ))
         } else {
-            // 正常，返回成功结果
             callback.onSuccess([
                 "code": 0,
                 "message": "获取蓝牙适配器状态成功",
@@ -193,13 +125,13 @@ public class QXBlePlugin: JDBridgeBasePlugin {
         if let errorCode = devicesResult["errorCode"] as? Int, errorCode != 0 {
             // 有错误，返回失败结果
             let errorMessage = devicesResult["errorMessage"] as? String ?? "获取蓝牙设备列表失败"
-            callback.onFail([
-                "code": errorCode,
-                "message": errorMessage,
-                "data": devicesResult["data"] ?? [:]
-            ])
+            callback.onFail(QXBridgeError.make(
+                code: errorCode,
+                message: errorMessage,
+                domain: errorDomain,
+                data: devicesResult["data"] ?? [:]
+            ))
         } else {
-            // 正常，返回成功结果
             callback.onSuccess([
                 "code": 0,
                 "message": "获取蓝牙设备列表成功",
@@ -214,78 +146,74 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     ///   - params: 预留参数（暂无实际用途）
     ///   - callback: 初始化结果回调
     private func initBle(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 初始化蓝牙中心管理器，并传递权限回调
+        if QXBleUtils.isBluetoothPermissionAuthorized() {
+            QXBleCentralManager.shared.setupCentralManager(permissionCallback: callback)
+            return
+        }
+
+        if QXBleUtils.isBluetoothPermissionDenied() {
+            callback.onFail(QXBridgeError.bluetoothDenied(domain: errorDomain))
+            return
+        }
+
+        // 首次未授权时先初始化 CBCentralManager，交给系统触发蓝牙权限弹窗。
         QXBleCentralManager.shared.setupCentralManager(permissionCallback: callback)
     }
     
     // MARK: - 设备扫描
     /// 开始扫描蓝牙设备
-    /// - Parameters:
-    ///   - params: 扫描参数
-    ///             - services: 要过滤的服务UUID数组（可选）
-    ///             - timeout: 扫描超时时间（默认10秒）
-    ///   - callback: 扫描操作结果回调
     private func startBluetoothDevicesDiscovery(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 权限前置检查：已拒绝
+        let central = QXBleCentralManager.shared
+        
+        guard central.centralManager != nil else {
+            callback.onFail(QXBleResult.failure(errorCode: .notInit))
+            return
+        }
+        
+        if QXBleUtils.isBluetoothPermissionNotDetermined() {
+            callback.onFail(QXBridgeError.bluetoothNotDetermined(domain: errorDomain))
+            return
+        }
+
         guard QXBleUtils.isBluetoothPermissionAuthorized() else {
-            callback.onFail(QXBleResult.failure(errorCode: .permissionDenied))
+            callback.onFail(QXBridgeError.bluetoothDenied(domain: errorDomain))
             return
         }
         
-        // 权限前置检查：未确定
-        if (QXBleUtils.isBluetoothPermissionNotDetermined()) {
-            callback.onFail(QXBleResult.failure(errorCode: .permissionNotDetermined))
+        guard central.state == .poweredOn else {
+            callback.onFail(QXBleResult.failure(errorCode: .bluetoothNotOpen))
             return
         }
         
-        // 生成唯一回调Key，用于标识本次扫描的回调
         let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBLEventType.onBluetoothDeviceFound.rawValue)
         
-        // 解析扫描过滤参数：服务UUID
         var serviceUUIDs: [CBUUID]? = nil
         if let uuids = params["services"] as? [String] {
             serviceUUIDs = uuids.map { CBUUID(string: $0) }
         }
         
-        // 解析扫描超时时间（默认10秒）
         let timeout = params["timeout"] as? TimeInterval ?? 10.0
         
-        // 调用中心管理器开始扫描
-        QXBleCentralManager.shared.startScan(
+        let started = central.startScan(
             services: serviceUUIDs,
             timeout: timeout,
             callbackKey: callbackKey,
             callback: callback
         )
         
-        // 立即返回扫描开始的成功提示
-        callback.onSuccess(QXBleResult.success(message: "开始扫描蓝牙设备"))
+        if started {
+            callback.onSuccess(["errMsg": "startBluetoothDevicesDiscovery:ok"])
+        }
     }
     
-    /// 停止扫描蓝牙设备
-    /// - Parameters:
-    ///   - params: 停止扫描参数
-    ///             - callbackKey: 扫描时生成的回调Key
-    ///   - callback: 停止扫描结果回调
     private func stopBluetoothDevicesDiscovery(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 获取扫描时的回调Key（无则生成默认值）
         let callbackKey = params["callbackKey"] as? String ?? QXBleUtils.generateCallbackKey(prefix: QXBLEventType.onBluetoothDeviceFound.rawValue)
-        
-        // 调用中心管理器停止扫描
         QXBleCentralManager.shared.stopScan(callbackKey: callbackKey)
-        
-        // 返回停止成功结果
         callback.onSuccess(QXBleResult.success(message: "已停止扫描蓝牙设备"))
     }
     
-    // MARK: - 设备连接
-    /// 连接蓝牙设备
-    /// - Parameters:
-    ///   - params: 连接参数
-    ///             - deviceId: 设备唯一标识（UUID字符串）
-    ///   - callback: 连接结果回调
+    // MARK: - Connection
     private func createBLEConnection(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 必传参数校验：deviceId
         guard let deviceId = params["deviceId"] as? String else {
             callback.onFail(QXBleResult.failure(
                 errorCode: .unknownError,
@@ -294,24 +222,31 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        // 生成连接操作的唯一回调Key
+        let centralManager = QXBleCentralManager.shared
+        guard let manager = centralManager.centralManager else {
+            callback.onFail(QXBleResult.failure(errorCode: .notInit))
+            return
+        }
+        
+        centralManager.cancelAllReconnections()
+        
+        if manager.isScanning {
+            QXBleLogger.log("🛑 检测到正在扫描，先停止扫描再连接设备")
+            manager.stopScan()
+            centralManager.clearCallbacks(matchingPrefix: QXBLEventType.onBluetoothDeviceFound.prefix)
+            QXBleLogger.log("✅ 已停止扫描，准备连接设备")
+        }
+        
         let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBLEventType.connectBluetoothDevice.rawValue, deviceId: deviceId)
         
-        // 调用中心管理器连接设备
-        QXBleCentralManager.shared.connectPeripheral(
+        centralManager.connectPeripheral(
             deviceId: deviceId,
             callbackKey: callbackKey,
             callback: callback
         )
     }
     
-    /// 断开蓝牙设备连接
-    /// - Parameters:
-    ///   - params: 断开连接参数
-    ///             - deviceId: 设备唯一标识（UUID字符串）
-    ///   - callback: 断开连接结果回调
     private func closeBLEConnection(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
-        // 必传参数校验：deviceId
         guard let deviceId = params["deviceId"] as? String else {
             callback.onFail(QXBleResult.failure(
                 errorCode: .unknownError,
@@ -320,10 +255,11 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        // 生成断开连接操作的唯一回调Key
-        let callbackKey = QXBleUtils.generateCallbackKey(prefix: "disconnect", deviceId: deviceId)
+        let callbackKey = QXBleUtils.generateCallbackKey(
+            prefix: QXBleCallbackType.disconnectDevice.prefix,
+            deviceId: deviceId
+        )
         
-        // 调用中心管理器断开设备连接
         QXBleCentralManager.shared.disconnectPeripheral(
             deviceId: deviceId,
             callbackKey: callbackKey,
@@ -338,9 +274,8 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     ///             - deviceId: 设备唯一标识
     ///             - serviceId: 服务UUID
     ///             - characteristicId: 特征值UUID
-    ///             - value: 字符串数据（可选）
-    ///             - valueBase64: Base64编码数据（可选）
-    ///             - valueHex: 16进制字符串数据（可选）
+    ///             - value: 字符串数据
+    ///             - valueType: 数据类型（UTF8/BASE64/HEX，默认UTF8）
     ///   - callback: 写入结果回调
     private func writeBLECharacteristicValue(params: [AnyHashable: Any]!, callback: JDBridgeCallBack) {
         // 必传参数校验
@@ -354,60 +289,37 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        var valueData: Data?
-        // 1. 取出基础参数
-        guard let valueStr = params["value"] as? String, !valueStr.isEmpty else {
-            print("数据解析失败：value参数为空")
+        // 获取数据和类型
+        let value = params["value"]
+        let valueTypeStr = params["valueType"] as? String
+        let dataType = QXBleUtils.DataType.from(valueTypeStr)
+        
+        guard let finalData = QXBleUtils.convertToData(value: value, type: dataType), !finalData.isEmpty else {
+            callback.onFail(QXBleResult.failure(
+                errorCode: .unknownError,
+                customMessage: "数据解析失败：value=\(String(describing: value))，type=\(valueTypeStr ?? "UTF8")"
+            ))
             return
         }
-        let valueType = (params["valueType"] as? String)?.uppercased() ?? "UTF8" // 默认UTF8
-        // 2. 按类型解析
-        switch valueType {
-        case "BASE64":
-            // Base64格式解析
-            valueData = Data(base64Encoded: valueStr)
-        case "HEX", "16进制":
-            // 16进制格式解析（兼容空格、大小写）
-            let cleanedHex = valueStr.replacingOccurrences(of: " ", with: "").uppercased()
-            let length = cleanedHex.count / 2
-            var data = Data(capacity: length)
-            for i in 0..<length {
-                let start = cleanedHex.index(cleanedHex.startIndex, offsetBy: i*2)
-                let end = cleanedHex.index(start, offsetBy: 2)
-                if let byte = UInt8(cleanedHex[start..<end], radix: 16) {
-                    data.append(byte)
-                } else {
-                    data = Data()
-                    break
-                }
-            }
-            valueData = data.count > 0 ? data : nil
-        case "UTF8", "TEXT":
-            // UTF8/文本格式解析（默认）
-            valueData = valueStr.data(using: .utf8)
-        default:
-            // 未知类型：默认按UTF8解析
-            print("未知的valueType：\(valueType)，默认按UTF8解析")
-            valueData = valueStr.data(using: .utf8)
-        }
-
-        // 3. 最终校验
-        guard valueData != nil else {
-            print("数据解析失败：value=\(valueStr)，type=\(valueType)")
+        QXBleLogger.log("🔍 检查设备连接状态，deviceId: \(deviceId)")
+        QXBleLogger.log("🔍 当前连接设备：\(QXBleCentralManager.shared.currentConnectedPeripheral?.name ?? "无")")
+        guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
+              peripheral.identifier.uuidString == deviceId else {
+            QXBleLogger.log("❌ 设备未连接或未找到：\(deviceId)")
+            callback.onFail(QXBleResult.failure(
+                errorCode: .deviceNotFound,
+                customMessage: "设备未连接，请先连接设备"
+            ))
             return
         }
-        // 设备连接状态校验
-        guard let peripheral = QXBleCentralManager.shared.connectedPeripherals[deviceId] else {
-            callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound))
-            return
-        }
-        // 调用外设管理器写入数据
+        QXBleLogger.log("✅ 找到已连接设备：\(peripheral.name ?? "未知设备")")
+        
         QXBlePeripheralManager.shared.writeValue(
             deviceId: deviceId,
             peripheral: peripheral,
             serviceId: serviceId,
             characteristicId: characteristicId,
-            value: valueData!,
+            value: finalData,
             callback: callback
         )
     }
@@ -427,16 +339,22 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        // 设备连接状态校验
-        guard let peripheral = QXBleCentralManager.shared.connectedPeripherals[deviceId] else {
-            callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound))
+        guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
+              peripheral.identifier.uuidString == deviceId else {
+            QXBleLogger.log("❌ 获取服务失败：设备未连接 (\(deviceId))")
+            callback.onFail(QXBleResult.failure(
+                errorCode: .deviceNotFound,
+                customMessage: "设备未连接，请先连接设备"
+            ))
             return
         }
         
-        // 生成服务发现回调Key并注册
-        let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.getBLEDeviceServices.prefix, deviceId: deviceId)
-        QXBlePeripheralManager.shared.registerCallback(callback, forKey: callbackKey)
+        QXBleLogger.log("🔍 开始获取设备服务：\(peripheral.name ?? "未知") (\(deviceId))")
         
+        // 生成服务发现回调Key并注册（含超时兜底）
+        let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.getBLEDeviceServices.prefix, deviceId: deviceId)
+        QXBlePeripheralManager.shared.registerDiscoverCallback(callback, forKey: callbackKey, timeoutMessage: "发现服务超时")
+
         // 主动发现设备所有服务（nil表示发现所有服务）
         peripheral.discoverServices(nil)
     }
@@ -458,18 +376,32 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        // 设备连接状态校验
-        guard let peripheral = QXBleCentralManager.shared.connectedPeripherals[deviceId] else {
+        guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
+              peripheral.identifier.uuidString == deviceId else {
             callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound))
             return
         }
         
-        // 生成特征发现回调Key并注册
-        let callbackKey = QXBleUtils.generateCallbackKey(prefix: QXBleCallbackType.discoverCharacteristics.prefix, deviceId: deviceId)
-        QXBlePeripheralManager.shared.registerCallback(callback, forKey: callbackKey)
-        
         // 转换服务UUID为CBUUID
         let serviceCBUUID = CBUUID(string: serviceId)
+        
+        // 如果特征已缓存，直接返回，避免 iOS 不重复触发 discover 回调导致调用悬挂。
+        let cacheKey = "\(deviceId)_\(serviceCBUUID.uuidString)"
+        if let chars = QXBlePeripheralManager.shared.characteristicsCache[cacheKey] {
+            callback.onSuccess(QXBleResult.success(
+                data: ["characteristics": QXBleUtils.formatCharacteristics(chars, serviceId: serviceCBUUID.uuidString)],
+                message: "获取特征成功，共\(chars.count)个特征"
+            ))
+            return
+        }
+        
+        // 生成服务粒度特征发现回调Key并注册（含超时兜底），避免等待其它服务的特征发现结果。
+        let callbackKey = QXBleUtils.generateCallbackKey(
+            prefix: QXBleCallbackType.discoverCharacteristics.prefix,
+            deviceId: deviceId,
+            serviceId: serviceCBUUID.uuidString
+        )
+        QXBlePeripheralManager.shared.registerDiscoverCallback(callback, forKey: callbackKey, timeoutMessage: "发现特征超时")
         
         // 检查服务是否已缓存
         if let services = QXBlePeripheralManager.shared.servicesCache[deviceId],
@@ -504,8 +436,8 @@ public class QXBlePlugin: JDBridgeBasePlugin {
             return
         }
         
-        // 设备连接状态校验
-        guard let peripheral = QXBleCentralManager.shared.connectedPeripherals[deviceId] else {
+        guard let peripheral = QXBleCentralManager.shared.currentConnectedPeripheral,
+              peripheral.identifier.uuidString == deviceId else {
             callback.onFail(QXBleResult.failure(errorCode: .deviceNotFound))
             return
         }
@@ -526,9 +458,8 @@ public class QXBlePlugin: JDBridgeBasePlugin {
     }
 }
 
-// MARK: - 权限状态扩展（iOS 13+）
+// MARK: - 权限状态扩展
 /// 扩展CBManagerAuthorization，提供可读的权限状态描述
-@available(iOS 13.0, *)
 extension CBManagerAuthorization: @retroactive CustomStringConvertible {
     public var description: String {
         switch self {
@@ -536,19 +467,6 @@ extension CBManagerAuthorization: @retroactive CustomStringConvertible {
         case .restricted: return "受限制（系统策略限制）"
         case .denied: return "已拒绝"
         case .allowedAlways: return "始终允许"
-        @unknown default: return "未知权限状态(\(rawValue))"
-        }
-    }
-}
-
-/// 扩展CBPeripheralManagerAuthorizationStatus，提供可读的权限状态描述（iOS < 13）
-extension CBPeripheralManagerAuthorizationStatus: @retroactive CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .notDetermined: return "未确定"
-        case .restricted: return "受限制（系统策略限制）"
-        case .denied: return "已拒绝"
-        case .authorized: return "已授权"
         @unknown default: return "未知权限状态(\(rawValue))"
         }
     }

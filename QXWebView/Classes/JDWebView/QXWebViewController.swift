@@ -11,7 +11,7 @@ import Foundation
 import CoreTelephony
 import QuickLook
 
-// 屏幕常量（替代原 Const，若项目已有可复用）
+
 private struct ScreenConst {
     static let screenWidth = UIScreen.main.bounds.width
     static let screenHeight = UIScreen.main.bounds.height
@@ -25,8 +25,17 @@ public class QXWebViewController: UIViewController {
     var webView: JDWebViewContainer!
     /// 加载的URL
     var urlString: String?
+    private var navigationBarStyleOverride: UIBarStyle?
     
+    @objc public weak var hostDelegate: QXWebViewHostDelegate?
+
+    /// 由 openWebViewForResult 打开时分配的回传 id（用于 closeWithResult / 取消兜底）
+    var hostPageId: String?
+
     private var previewFileURL: URL!
+    private var initialLoadingView: UIView?
+    private var initialLoadingWorkItem: DispatchWorkItem?
+    private var initialLoadingPageFinishWorkItem: DispatchWorkItem?
 
     // MARK: - 布局控制属性
     var isNavigationBarHidden: Bool = true {
@@ -63,14 +72,21 @@ public class QXWebViewController: UIViewController {
         setupUI()
         // 设置通知监听
         setupNotificationObservers()
-        // 加载URL
-        if let url = urlString {
-            loadURL(url)
-        }
         let basePlugin = QXBasePlugin()
         let blePlugin = QXBlePlugin()
+        let hostBridgePlugin = QXHostBridgePlugin()
+        let lifecyclePlugin = QXLifecyclePlugin()
         webView.registerPlugin(withName: "QXBasePlugin", plugin: basePlugin)
         webView.registerPlugin(withName: "QXBlePlugin", plugin: blePlugin)
+        webView.registerPlugin(withName: "QXHostBridgePlugin", plugin: hostBridgePlugin)
+        webView.registerPlugin(withName: QXLifecyclePlugin.pluginName, plugin: lifecyclePlugin)
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageLoad", nativeType: "viewDidLoad")
+        // 入口 HTML 由服务端响应头 `Cache-Control: no-cache` + `ETag` 控制,
+        // WKWebView 默认策略即可命中 304/重拉,H5 更新即时生效;
+        // 需要强制清缓存时,由 H5 调用 QXBasePlugin.setWebCacheToken 触发(保留登录态)
+        if let url = urlString {
+            self.loadURL(url)
+        }
     }
     
     public override func viewWillAppear(_ animated: Bool) {
@@ -79,12 +95,28 @@ public class QXWebViewController: UIViewController {
         navigationController?.setNavigationBarHidden(isNavigationBarHidden, animated: animated)
         // 更新状态栏样式
         updateStatusBarStyle()
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageWillShow", nativeType: "viewWillAppear")
+    }
+
+    public override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageShow", nativeType: "viewDidAppear")
     }
     
     public override func viewWillDisappear(_ animated: Bool) {
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageWillHide", nativeType: "viewWillDisappear")
         super.viewWillDisappear(animated)
     }
-    
+
+    public override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageHide", nativeType: "viewDidDisappear")
+        // 被 pop 出栈 / 被 dismiss（用户返回，未调用 closeWithResult）=> 回传取消兜底
+        if isMovingFromParent || isBeingDismissed, let pageId = hostPageId {
+            QXPageResultCenter.shared.cancel(pageId)
+        }
+    }
+
     public override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateWebViewFrame()
@@ -94,11 +126,7 @@ public class QXWebViewController: UIViewController {
         if isImmersiveStatusBar {
             return .lightContent
         } else {
-            if #available(iOS 13.0, *) {
-                return .darkContent
-            } else {
-                return .default
-            }
+            return .darkContent
         }
     }
     
@@ -113,7 +141,7 @@ public class QXWebViewController: UIViewController {
     /// - Parameter url: 要加载的URL
     public init(url: String) {
         self.urlString = url
-        super.init(nibName: nil, bundle: nil) 
+        super.init(nibName: nil, bundle: nil)
     }
     
     required public init?(coder: NSCoder) {
@@ -130,33 +158,30 @@ public class QXWebViewController: UIViewController {
         setupWebView()
         // 添加原生AutoLayout约束
         setupNativeConstraints()
+        setupInitialLoadingView()
+        showInitialLoading()
     }
     
     /// 设置WebView
     private func setupWebView() {
         let configuration = JDWebViewContainer.defaultConfiguration()
-        
         // 优化WebView配置
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
         configuration.suppressesIncrementalRendering = false
-        
         webView = JDWebViewContainer(
             frame: .init(x: 0, y: 0, width: ScreenConst.screenWidth, height: ScreenConst.screenHeight),
             configuration: configuration
         )
-        
         if #available(iOS 16.4, *) {
             webView.realWebView.isInspectable = true
         }
         webView.delegate = self
         webView.backgroundColor = .systemBackground
-        
         webView.realWebView.scrollView.decelerationRate = .normal
         webView.realWebView.scrollView.bounces = true
         webView.realWebView.scrollView.showsVerticalScrollIndicator = true
         webView.realWebView.scrollView.showsHorizontalScrollIndicator = false
-        
         // 禁用AutoresizingMask，启用AutoLayout
         webView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(webView)
@@ -170,7 +195,6 @@ public class QXWebViewController: UIViewController {
         // 初始top/bottom约束（后续动态更新）
         webViewTopConstraint = webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
         webViewBottomConstraint = webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
-        
         // 激活所有约束
         NSLayoutConstraint.activate([
             webViewLeadingConstraint,
@@ -187,9 +211,74 @@ public class QXWebViewController: UIViewController {
         webView.realWebView.scrollView.showsVerticalScrollIndicator = false
         webView.realWebView.scrollView.showsHorizontalScrollIndicator = false
         webView.realWebView.scrollView.bounces = true
-        // 配置缓存策略
-        let cacheConfig = URLCache(memoryCapacity: 1024 * 1024 * 10, diskCapacity: 1024 * 1024 * 100, diskPath: "WebCache")
-        URLCache.shared = cacheConfig
+    }
+
+    private func setupInitialLoadingView() {
+        let loadingView = UIView()
+        loadingView.translatesAutoresizingMaskIntoConstraints = false
+        loadingView.backgroundColor = .systemBackground
+        loadingView.isUserInteractionEnabled = true
+
+        let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        indicator.startAnimating()
+        loadingView.addSubview(indicator)
+
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "加载中..."
+        label.textColor = .secondaryLabel
+        label.font = .systemFont(ofSize: 14)
+        loadingView.addSubview(label)
+
+        view.addSubview(loadingView)
+        NSLayoutConstraint.activate([
+            loadingView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            loadingView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            loadingView.topAnchor.constraint(equalTo: view.topAnchor),
+            loadingView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            indicator.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor),
+            indicator.centerYAnchor.constraint(equalTo: loadingView.centerYAnchor),
+            label.topAnchor.constraint(equalTo: indicator.bottomAnchor, constant: 12),
+            label.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor)
+        ])
+        initialLoadingView = loadingView
+    }
+
+    public func showInitialLoading() {
+        initialLoadingWorkItem?.cancel()
+        initialLoadingPageFinishWorkItem?.cancel()
+        initialLoadingView?.isHidden = false
+        if let initialLoadingView {
+            view.bringSubviewToFront(initialLoadingView)
+        }
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.hideInitialLoading()
+        }
+        initialLoadingWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: workItem)
+    }
+
+    public func hideInitialLoading() {
+        initialLoadingWorkItem?.cancel()
+        initialLoadingPageFinishWorkItem?.cancel()
+        initialLoadingWorkItem = nil
+        initialLoadingPageFinishWorkItem = nil
+        UIView.animate(withDuration: 0.18) {
+            self.initialLoadingView?.alpha = 0
+        } completion: { _ in
+            self.initialLoadingView?.isHidden = true
+            self.initialLoadingView?.alpha = 1
+        }
+    }
+
+    private func scheduleInitialLoadingPageFinishFallback() {
+        initialLoadingPageFinishWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.hideInitialLoading()
+        }
+        initialLoadingPageFinishWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: workItem)
     }
     
     /// 设置通知监听
@@ -224,7 +313,7 @@ public class QXWebViewController: UIViewController {
             isNavigationBarHidden = hidden
         }
     }
-    
+
     // MARK: - 布局更新方法
     
     /// 统一处理布局相关的UI更新
@@ -257,36 +346,42 @@ public class QXWebViewController: UIViewController {
                 self.webViewTopConstraint,
                 self.webViewBottomConstraint
             ])
-            
             // 更新Top约束
             if self.isNavigationBarHidden && self.isImmersiveStatusBar {
                 self.webViewTopConstraint = self.webView.topAnchor.constraint(equalTo: self.view.topAnchor)
             } else {
                 self.webViewTopConstraint = self.webView.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor)
             }
-            
             // 更新Bottom约束
             if self.shouldHandleBottomSafeArea {
                 self.webViewBottomConstraint = self.webView.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor)
             } else {
                 self.webViewBottomConstraint = self.webView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
             }
-            
             // 激活新约束
             NSLayoutConstraint.activate([
                 self.webViewTopConstraint,
                 self.webViewBottomConstraint
             ])
-            
             // 强制刷新布局
             self.view.layoutIfNeeded()
         }
     }
     
-    /// 更新状态栏样式（通过系统首选项）
+    /// 更新状态栏样式
     private func updateStatusBarStyle() {
-        navigationController?.navigationBar.barStyle = isImmersiveStatusBar ? .black : .default
+        let resolvedStyle = navigationBarStyleOverride ?? (isImmersiveStatusBar ? .black : .default)
+        navigationController?.navigationBar.barStyle = resolvedStyle
         setNeedsStatusBarAppearanceUpdate()
+    }
+
+    func setNavigationBarStyleOverride(_ style: UIBarStyle?) {
+        navigationBarStyleOverride = style
+        if let style {
+            isImmersiveStatusBar = (style == .black)
+        } else {
+            updateStatusBarStyle()
+        }
     }
     
     /// 清理资源
@@ -298,14 +393,62 @@ public class QXWebViewController: UIViewController {
         print("QRWebViewController资源清理完成")
     }
     
-    /// 清理WebView缓存
-    private func clearWebViewCache() {
+    private static let webCacheTokenKey = "QXWebView.cachePurgeToken"
+
+    /// 供 H5 调用(QXBasePlugin.setWebCacheToken)触发的按 token 清缓存:
+    /// 传入 token 与上次记录不同时,清一次 HTTP 缓存并记录新 token;相同则跳过、零开销。
+    /// **保留 cookie、localStorage、sessionStorage**(不影响登录态)。
+    /// - Parameter completion: 回调 `cleared` —— 本次是否真的执行了清理。
+    static func purgeHTTPCacheIfTokenChanged(_ token: String, completion: @escaping (_ cleared: Bool) -> Void) {
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: webCacheTokenKey) != token else {
+            completion(false)
+            return
+        }
+        defaults.set(token, forKey: webCacheTokenKey)
+        purgeHTTPCachePreservingLogin {
+            print("WebView 磁盘缓存已清理(token=\(token))")
+            completion(true)
+        }
+    }
+
+    /// 清磁盘/内存/离线/Fetch 缓存,**保留 cookie、localStorage、sessionStorage**(不掉登录)。
+    static func purgeHTTPCachePreservingLogin(completion: @escaping () -> Void) {
+        var dataTypes: Set<String> = [
+            WKWebsiteDataTypeDiskCache,
+            WKWebsiteDataTypeMemoryCache,
+            WKWebsiteDataTypeOfflineWebApplicationCache
+        ]
+        if #available(iOS 11.3, *) {
+            dataTypes.insert(WKWebsiteDataTypeFetchCache)
+        }
+        URLCache.shared.removeAllCachedResponses()
+        WKWebsiteDataStore.default().removeData(
+            ofTypes: dataTypes,
+            modifiedSince: Date(timeIntervalSince1970: 0),
+            completionHandler: completion
+        )
+    }
+
+    /// 清理 WebView 缓存(磁盘/内存/Offline/Fetch),**保留 cookie、localStorage、sessionStorage**(不掉登录)。
+    /// 与 purgeHTTPCachePreservingLogin 行为一致,确保低内存等场景不会误清登录态。
+    private func clearWebViewCache(completion: (() -> Void)? = nil) {
+        webView.stopLoading()
+        URLCache.shared.removeAllCachedResponses()
+
+        var dataTypes: Set<String> = [
+            WKWebsiteDataTypeDiskCache,
+            WKWebsiteDataTypeMemoryCache,
+            WKWebsiteDataTypeOfflineWebApplicationCache
+        ]
+        if #available(iOS 11.3, *) {
+            dataTypes.insert(WKWebsiteDataTypeFetchCache)
+        }
+
         let dataStore = webView.realWebView.configuration.websiteDataStore
-        let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
-        let date = Date(timeIntervalSince1970: 0)
-        
-        dataStore.removeData(ofTypes: dataTypes, modifiedSince: date) {
-            print("WebView缓存清理完成")
+        dataStore.removeData(ofTypes: dataTypes, modifiedSince: Date(timeIntervalSince1970: 0)) {
+            print("WebView 缓存清理完成(保留登录态)")
+            completion?()
         }
     }
     
@@ -330,11 +473,32 @@ public class QXWebViewController: UIViewController {
             print("URL格式错误：\(urlString)")
             return
         }
-        // 创建请求
-        let request = URLRequest(url: url)
-        webView.load(request)
-        
+        if url.isFileURL {
+            let readAccessURL = url.deletingLastPathComponent()
+            webView.loadFileURL(url, allowingReadAccessTo: readAccessURL)
+            print("开始加载本地URL: \(urlString)")
+            return
+        }
+        webView.load(URLRequest(url: url))
         print("开始加载URL: \(urlString)")
+    }
+
+    public func refreshForNetworkRecovery(url fallbackURLString: String? = nil) {
+        if let currentURL = webView.realWebView.url {
+            if currentURL.isFileURL {
+                webView.loadFileURL(currentURL, allowingReadAccessTo: currentURL.deletingLastPathComponent())
+            } else {
+                webView.realWebView.reloadFromOrigin()
+            }
+            print("网络状态恢复，刷新当前 H5 页面")
+            return
+        }
+
+        let targetURLString = fallbackURLString ?? urlString
+        if let targetURLString {
+            loadURL(targetURLString)
+            print("网络状态恢复，重新加载初始 H5 页面")
+        }
     }
 
     /// 解析URL参数
@@ -358,11 +522,10 @@ public class QXWebViewController: UIViewController {
         // 处理状态栏样式参数
         if let statusBarStyleParam = components.queryItems?.first(where: { $0.name == "statusBarStyle" })?.value,
            statusBarStyleParam == "dark" {
-            // 扩展：可添加更多状态栏样式逻辑
+           // 扩展：可添加更多状态栏样式逻辑
         }
     }
-    
-    
+
     public func openFile(fileURL: URL) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
@@ -392,6 +555,10 @@ public class QXWebViewController: UIViewController {
     }
     
     deinit {
+        initialLoadingWorkItem?.cancel()
+        initialLoadingPageFinishWorkItem?.cancel()
+        QXLifecyclePlugin.dispatchPageLifecycle(webView: webView, type: "pageDestroy", nativeType: "deinit")
+        QXLifecyclePlugin.clear(webView: webView)
         // 移除通知监听
         NotificationCenter.default.removeObserver(self)
         print("QRWebViewController已释放")
@@ -403,16 +570,19 @@ extension QXWebViewController: WebViewDelegate {
     
     // 网页开始加载时调用
     public func webView(_ webView: JDWebViewContainer, didStartProvisionalNavigation navigation: WKNavigation!) {
+        showInitialLoading()
         print("网页开始加载")
     }
     
     // 网页加载完成时调用
     public func webView(_ webView: JDWebViewContainer, didFinish navigation: WKNavigation!) {
+        scheduleInitialLoadingPageFinishFallback()
         print("网页加载完成")
     }
     
     // 网页加载失败时调用
     public func webView(_ webView: JDWebViewContainer, didFail navigation: WKNavigation!, withError error: Error) {
+        hideInitialLoading()
         print("网页加载失败: \(error.localizedDescription)")
     }
     
@@ -429,13 +599,17 @@ extension QXWebViewController: WebViewDelegate {
         }
         // 处理 target=_blank 的情况：在当前视图中打开
         if navigationAction.targetFrame == nil {
-            webView.load(URLRequest(url: url))
+            if url.isFileURL {
+                webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+            } else {
+                webView.load(URLRequest(url: url))
+            }
             decisionHandler(.cancel)
             return
         }
         // 处理外部 scheme
         let scheme = url.scheme?.lowercased() ?? ""
-        let allowedSchemes: Set<String> = ["http", "https"]
+        let allowedSchemes: Set<String> = ["http", "https", "file"]
         if !allowedSchemes.contains(scheme) {
             if UIApplication.shared.canOpenURL(url) {
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)

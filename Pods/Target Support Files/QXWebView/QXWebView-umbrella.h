@@ -10,7 +10,6 @@
 #endif
 #endif
 
-#import "QXWebView.h"
 #import "JDBridge.h"
 #import "JDBridgeBasePlugin.h"
 #import "JDBridgeBasePluginPrivate.h"
@@ -20,6 +19,7 @@
 #import "_jdbridge.h"
 #import "JDWebView.h"
 #import "JDWebViewContainer.h"
+#import "QXWebView.h"
 
 FOUNDATION_EXPORT double QXWebViewVersionNumber;
 FOUNDATION_EXPORT const unsigned char QXWebViewVersionString[];

@@ -14,8 +14,8 @@ class GCJ02Converter: NSObject {
         let ee = 0.00669342162296594323
         let pi = Double.pi
         
-        var lat = coordinate.latitude
-        var lon = coordinate.longitude
+        let lat = coordinate.latitude
+        let lon = coordinate.longitude
         
         if outOfChina(lat, lon) {
             return CLLocationCoordinate2D(latitude: lat, longitude: lon)

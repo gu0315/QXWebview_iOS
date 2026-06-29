@@ -8,7 +8,7 @@
 
 Pod::Spec.new do |s|
   s.name             = 'QXWebView'
-  s.version          = '0.1.1'
+  s.version          = '0.1.8'
   s.summary = 'A lightweight WebView container with JS-Native bridge support.'
   s.homepage         = 'https://github.com/gu0315/QXWebview'
   s.license      = { :type => 'Apache License, Version 2.0', :text => <<-LICENSE
@@ -26,21 +26,15 @@ Pod::Spec.new do |s|
     LICENSE
   }
   s.author             = { "顾钱想" => "228383741@qq.com" }
-  s.source           = { :git => 'https://github.com/gu0315/QXWebview.git', :tag => s.version.to_s }
+  s.source           = { :git => 'https://github.com/gu0315/QXWebview_iOS.git', :tag => s.version.to_s }
   # s.social_media_url = 'https://twitter.com/<TWITTER_USERNAME>'
   s.ios.deployment_target = '13.0'
 
-  s.source_files = 'Classes/**/*.{h,m,mm,swift,js}'
+  s.source_files = 'QXWebView/Classes/**/*.{swift,h,m}'
   
-  # 可选：如果需要排除某些文件/文件夹，可补充
-  # s.exclude_files = 'QXWebView/Classes/JDBridge/UnusedFile.swift'
-  
-  # s.resource_bundles = {
-  #  'QXWebView' => ['QXWebView/Resources/*']
-  # }
+  s.public_header_files = 'QXWebView/Classes/**/*.h'
 
-  s.public_header_files = 'Classes/QXWebView.h', 'Classes/JDBridge/*.h', 'Classes/JDWebView/*.h'
-  s.frameworks = 'UIKit', 'CoreLocation', 'Foundation'
+  s.frameworks = 'UIKit', 'CoreLocation', 'Foundation', 'AVFoundation', 'AudioToolbox', 'Photos'
   # s.libraries = 'z', 'c++'
 
   s.swift_versions = ['5.0']

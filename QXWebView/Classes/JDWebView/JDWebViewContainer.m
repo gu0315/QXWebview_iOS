@@ -68,9 +68,7 @@ typedef void(^WebKitAlertBlock)(void);
     preferences.javaScriptCanOpenWindowsAutomatically = YES;
     
     configuration.processPool = [JDWebViewContainer processPool];
-    if (@available(iOS 13.0, *)) {
-        configuration.defaultWebpagePreferences.preferredContentMode = WKContentModeMobile;
-    }
+    configuration.defaultWebpagePreferences.preferredContentMode = WKContentModeMobile;
     configuration.allowsInlineMediaPlayback = YES;
     return configuration;
 }

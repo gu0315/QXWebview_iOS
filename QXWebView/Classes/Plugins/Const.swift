@@ -21,13 +21,9 @@ public extension Const {
     static let screenHeight = UIScreen.main.bounds.size.height
     /// 状态栏高度
     static var statusBarHeight: CGFloat {
-        if #available(iOS 13.0, *) {
-            let windowScene = UIApplication.shared.connectedScenes
-                .first { $0.activationState == .foregroundActive } as? UIWindowScene
-            return windowScene?.statusBarManager?.statusBarFrame.height ?? 0
-        } else {
-            return UIApplication.shared.statusBarFrame.height
-        }
+        let windowScene = UIApplication.shared.connectedScenes
+            .first { $0.activationState == .foregroundActive } as? UIWindowScene
+        return windowScene?.statusBarManager?.statusBarFrame.height ?? 0
     }
 
     /// 导航栏高度
@@ -56,7 +52,7 @@ public extension Const {
 
     /// 是否是iphoneX
     static var isIphoneX: Bool {
-        guard UI_USER_INTERFACE_IDIOM() == .phone else { return false }
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return false }
         guard #available(iOS 11.0, *) else { return false }
         guard let window = UIApplication.shared.windows.first else { return false }
         let isX = window.safeAreaInsets.bottom > 0
