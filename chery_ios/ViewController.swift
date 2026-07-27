@@ -42,7 +42,7 @@ final class UserSession {
 class ViewController: UIViewController {
 
     // 默认 H5 地址（可在界面上修改）
-    private let defaultH5Url = "http://172.20.10.4:5173/"
+    private let defaultH5Url = "http://172.20.10.4:3000/#/?token=7d0b9aab-73d7-4da6-be40-72784a19d036"
 
     // MARK: - UI Components
     private let scrollView = UIScrollView()
@@ -161,7 +161,7 @@ class ViewController: UIViewController {
         field.autocapitalizationType = .none
         field.clearButtonMode = .whileEditing
         field.backgroundColor = .white
-        field.text = "15755336837" //18352537909
+        field.text = "15755336837"  // "17768361796" //18352537909
         field.snp.makeConstraints { make in
             make.height.equalTo(44)
         }
@@ -345,8 +345,11 @@ extension ViewController: QXWebViewHostDelegate {
     func webViewRequestOpenPage(url: String, params: [String: Any]?, completion: @escaping (Any?) -> Void) {
         let safeParams = params ?? [:]
         switch url {
-        case "app://pay":
-            completion(["success": true, "action": "pay", "params": safeParams])
+        case "app://openFRConfirmPay":
+            // 参数:orderSeq 绿能侧充电订单号 / stationName 充电站名称 / powerConnectorId 充电桩编号
+            // 真实宿主在这里跳自己的确认支付页;Demo 用模拟页面代替:
+            // 「确认支付」-> code 0,「取消」/ 返回 -> code 1,拉不起页面 -> code 2
+            FRConfirmPayViewController.present(params: safeParams, completion: completion)
         case "app://login":
             completion(UserSession.shared.userInfoPayload())
         default:
