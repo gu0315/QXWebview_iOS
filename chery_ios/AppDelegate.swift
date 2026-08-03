@@ -273,8 +273,12 @@ final class FRConfirmPayViewController: UIViewController {
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        // 兜底:页面被其他方式关掉时,按用户取消回调,避免 H5 一直等
-        finish(code: "1", message: "用户取消支付")
+        // 兜底:仅在真正离开(被 dismiss / 从父控制器移除)时按用户取消回调,避免 H5 一直等。
+        // 注意不能无条件兜底:若在本页之上再 present 支付页(如微信支付),viewDidDisappear 也会触发,
+        // 那种"被覆盖"的场景必须放行,否则会把正常支付误判成取消。
+        if isBeingDismissed || isMovingFromParent {
+            finish(code: "1", message: "用户取消支付")
+        }
     }
 
     private func setupUI() {

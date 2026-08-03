@@ -42,7 +42,7 @@ final class UserSession {
 class ViewController: UIViewController {
 
     // 默认 H5 地址（可在界面上修改）
-    private let defaultH5Url = "http://172.20.10.4:3000/#/?token=7d0b9aab-73d7-4da6-be40-72784a19d036"
+    private let defaultH5Url = "http://172.20.10.4:3000/"
 
     // MARK: - UI Components
     private let scrollView = UIScrollView()

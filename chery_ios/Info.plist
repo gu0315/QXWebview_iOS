@@ -28,6 +28,13 @@
 	</array>
 	<key>NSBluetoothWhenInUseUsageDescription</key>
 	<string>蓝牙</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>需要获取您的位置以查找附近的充电站</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>PreciseLocationForCharging</key>
+		<string>需要精确位置才能为您匹配最近的充电桩</string>
+	</dict>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>需要访问相册以选择图片（如设置头像）</string>
 	<key>NSCameraUsageDescription</key>
